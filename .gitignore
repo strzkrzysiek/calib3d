@@ -1,5 +1,7 @@
 # build directories
 /build*
 
-# IDE files
-.idea/
+# hidden files, but .gitignore & .clang-format
+.*
+!/.gitignore
+!/.clang-format
