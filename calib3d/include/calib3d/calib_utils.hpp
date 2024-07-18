@@ -13,7 +13,11 @@ inline Eigen::Matrix3d skewSymmetric(const Eigen::DenseBase<Derived>& v) {
   EIGEN_STATIC_ASSERT_VECTOR_SPECIFIC_SIZE(Derived, 3);
 
   Eigen::Matrix3d skew;
-  skew << 0., -v.z(), v.y(), v.z(), 0., -v.x(), -v.y(), v.x(), 0.;
+  // clang-format off
+  skew <<     0., -v.z(),  v.y(),
+           v.z(),     0., -v.x(),
+          -v.y(),  v.x(),     0.;
+  // clang-format on
   return skew;
 }
 

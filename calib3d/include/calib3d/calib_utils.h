@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Eigen/Core>
-#include <initializer_list>
 #include <random>
 
 namespace calib3d {

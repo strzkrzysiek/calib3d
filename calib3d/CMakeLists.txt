@@ -1,3 +1,4 @@
+find_package(Boost REQUIRED COMPONENTS math_c99)
 find_package(Ceres REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(glog REQUIRED)
@@ -11,9 +12,11 @@ add_library(calib3d
     include/calib3d/dataset.h
     include/calib3d/ransac.h
     include/calib3d/ransac.hpp
+    include/calib3d/ThreeViewReconstruction.h
     include/calib3d/types.h
     src/calib3d.cpp
     src/dataset.cpp
+    src/ThreeViewReconstruction.cpp
 )
 
 target_include_directories(calib3d

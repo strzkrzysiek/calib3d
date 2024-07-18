@@ -12,7 +12,7 @@ struct CameraBundle {
   CameraIntrinsics intrinsics;
   CameraExtrinsics extrinsics;
   CameraSize size;
-  std::map<size_t, Eigen::Vector2d> observations;
+  Observations observations;
 };
 
 struct Dataset {

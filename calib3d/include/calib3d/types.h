@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <map>
 
 namespace calib3d {
 
@@ -33,6 +34,12 @@ using CameraSize = Eigen::Vector2i;
 struct CameraCalib {
   CameraIntrinsics intrinsics;
   CameraExtrinsics extrinsics;
+
+  [[nodiscard]] Eigen::Matrix<double, 3, 4> P() const {
+    return intrinsics.K() * extrinsics.matrix().topRows<3>();
+  }
 };
+
+using Observations = std::map<size_t, Eigen::Vector2d>;
 
 } // namespace calib3d
