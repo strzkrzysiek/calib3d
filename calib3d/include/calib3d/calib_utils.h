@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <initializer_list>
 #include <random>
 
 namespace calib3d {
@@ -37,6 +38,26 @@ Eigen::Matrix3d findFundamentalMatrixRansac(const Eigen::DenseBase<DerivedSrc>& 
                                             double confidence,
                                             size_t max_iters,
                                             size_t seed = std::random_device()());
+
+template <class Derived3D, class Derived2D>
+Eigen::Matrix<double, 3, 4> findProjectionMatrix(const Eigen::DenseBase<Derived3D>& world_points,
+                                                 const Eigen::DenseBase<Derived2D>& image_points);
+
+template <class Derived3D, class Derived2D>
+Eigen::Matrix<double, 3, 4> findProjectionMatrixRansac(
+    const Eigen::DenseBase<Derived3D>& world_points,
+    const Eigen::DenseBase<Derived2D>& image_points,
+    double ransac_thr,
+    double confidence,
+    size_t max_iters,
+    size_t seed = std::random_device()());
+
+template <class Derived1, class Derived2>
+Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> triangulatePoints(
+    const Eigen::DenseBase<Derived1>& image_points1,
+    const Eigen::DenseBase<Derived2>& image_points2,
+    const Eigen::Matrix<double, 3, 4>& P1,
+    const Eigen::Matrix<double, 3, 4>& P2);
 
 } // namespace calib3d
 

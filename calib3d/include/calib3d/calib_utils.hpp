@@ -155,4 +155,107 @@ Eigen::Matrix3d findFundamentalMatrixRansac(const Eigen::DenseBase<DerivedSrc>& 
       src_points, dst_points, ransac_thr, confidence, max_iters, seed);
 }
 
+template <class Derived3D, class Derived2D>
+Eigen::Matrix<double, 3, 4> findProjectionMatrix(const Eigen::DenseBase<Derived3D>& world_points,
+                                                 const Eigen::DenseBase<Derived2D>& image_points) {
+  static_assert(Derived3D::RowsAtCompileTime == 3);
+  static_assert(Derived2D::RowsAtCompileTime == 2);
+  CHECK_EQ(world_points.cols(), image_points.cols());
+
+  const size_t n_points = world_points.cols();
+  CHECK_GE(n_points, 6);
+
+  Eigen::Matrix<double, 4, Derived3D::ColsAtCompileTime> world_points_normed;
+  Eigen::Matrix<double, 3, Derived2D::ColsAtCompileTime> image_points_normed;
+  Eigen::Matrix4d T_world;
+  Eigen::Matrix3d T_image;
+
+  normalizePoints(world_points, world_points_normed, T_world);
+  normalizePoints(image_points, image_points_normed, T_image);
+
+  constexpr auto ARows = (Derived3D::ColsAtCompileTime == Eigen::Dynamic)
+                             ? Eigen::Dynamic
+                             : 2 * Derived3D::ColsAtCompileTime;
+  Eigen::Matrix<double, ARows, 12> A(n_points * 2, 12);
+  A.setZero();
+
+  for (size_t i = 0; i < n_points; i++) {
+    A.template block<1, 4>(2 * i, 0) = image_points_normed(2, i) * world_points_normed.col(i);
+    A.template block<1, 4>(2 * i, 8) = -image_points_normed(0, i) * world_points_normed.col(i);
+    A.template block<1, 4>(2 * i + 1, 4) = image_points_normed(2, i) * world_points_normed.col(i);
+    A.template block<1, 4>(2 * i + 1, 8) = -image_points_normed(1, i) * world_points_normed.col(i);
+  }
+
+  Eigen::JacobiSVD svd_A(A, Eigen::ComputeFullV);
+  Eigen::Matrix<double, 3, 4> P = svd_A.matrixV().col(11).template reshaped<Eigen::RowMajor>(3, 4);
+  P = T_image.inverse() * P * T_world;
+
+  return P;
+}
+
+struct ProjectionEstimatorRansacSpec {
+  using ModelMatrix = Eigen::Matrix<double, 3, 4>;
+  static constexpr size_t MinSampleSize = 6;
+  static constexpr size_t Dim1 = 3;
+  static constexpr size_t Dim2 = 2;
+
+  template <class Derived1, class Derived2>
+  static ModelMatrix fitModel(const Eigen::DenseBase<Derived1>& points1,
+                              const Eigen::DenseBase<Derived2>& points2) {
+    return findProjectionMatrix(points1, points2);
+  }
+
+  template <class Derived1, class Derived2>
+  static Eigen::Vector<double, Derived1::ColsAtCompileTime> distance(
+      const Eigen::DenseBase<Derived1>& points1,
+      const Eigen::DenseBase<Derived2>& points2,
+      const ModelMatrix& model) {
+    auto reprojected_points =
+        (model * points1.colwise().homogeneous()).colwise().hnormalized().eval();
+    return (reprojected_points - points2.derived()).colwise().squaredNorm();
+  }
+};
+
+template <class Derived3D, class Derived2D>
+Eigen::Matrix<double, 3, 4> findProjectionMatrixRansac(
+    const Eigen::DenseBase<Derived3D>& world_points,
+    const Eigen::DenseBase<Derived2D>& image_points,
+    double ransac_thr,
+    double confidence,
+    size_t max_iters,
+    size_t seed) {
+  return RansacEngine<ProjectionEstimatorRansacSpec>::fit(
+      world_points, image_points, ransac_thr, confidence, max_iters, seed);
+}
+
+template <class Derived1, class Derived2>
+Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> triangulatePoints(
+    const Eigen::DenseBase<Derived1>& image_points1,
+    const Eigen::DenseBase<Derived2>& image_points2,
+    const Eigen::Matrix<double, 3, 4>& P1,
+    const Eigen::Matrix<double, 3, 4>& P2) {
+  static_assert(Derived1::RowsAtCompileTime == 2);
+  static_assert(Derived2::RowsAtCompileTime == 2);
+  CHECK_EQ(image_points1.cols(), image_points2.cols());
+  const int n_points = image_points1.cols();
+
+  Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> world_points(3, n_points);
+
+  for (int i = 0; i < n_points; i++) {
+    Eigen::Matrix4d A;
+    Eigen::Vector2d pt1 = image_points1.col(i);
+    Eigen::Vector2d pt2 = image_points2.col(i);
+
+    A.row(0) = pt1.x() * P1.row(2) - P1.row(0);
+    A.row(1) = pt1.y() * P1.row(2) - P1.row(1);
+    A.row(2) = pt2.x() * P2.row(2) - P2.row(0);
+    A.row(3) = pt2.y() * P2.row(2) - P2.row(1);
+
+    Eigen::JacobiSVD svd_A(A, Eigen::ComputeFullV);
+    world_points.col(i) = svd_A.matrixV().col(3).hnormalized();
+  }
+
+  return world_points;
+}
+
 } // namespace calib3d

@@ -360,11 +360,118 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservationsWithOu
   EXPECT_GT(inlier_ratio, 0.95 * inlier_ratio_in_sample);
 }
 
+TEST_F(CalibUtilsTestFixture, FindProjectionMatrix) {
+  Eigen::Matrix<double, 3, 4> P = findProjectionMatrix(world_pts, image_pts1);
+  P /= P(0, 0);
+  P1 /= P1(0, 0);
+
+  EXPECT_TRUE(P.isApprox(P1, 1e-5));
+}
+
+TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacAccurateCorrespondences) {
+  const size_t ransac_seed = 42;
+  Eigen::Matrix<double, 3, 4> P =
+      findProjectionMatrixRansac(world_pts, image_pts1, 5.0, 0.99, 1000, ransac_seed);
+  P /= P(0, 0);
+  P1 /= P1(0, 0);
+
+  EXPECT_TRUE(P.isApprox(P1, 1e-5));
+}
+
+TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservations) {
+  const size_t data_seed = 7;
+  std::mt19937 rng(data_seed);
+  const double pixel_noise = 2.0;
+  std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
+
+  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+
+  for (int i = 0; i < image_pts1.cols(); i++) {
+    noisy_image_pts1(0, i) += gaussian_noise(rng);
+    noisy_image_pts1(1, i) += gaussian_noise(rng);
+  }
+
+  const double inlier_thr = pixel_noise * 5.99;
+  Eigen::Matrix<double, 3, 4> P =
+      findProjectionMatrixRansac(world_pts, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
+
+  auto distance = ProjectionEstimatorRansacSpec::distance(world_pts, image_pts1, P);
+
+  const size_t n_inliers = (distance.array() < inlier_thr * inlier_thr).count();
+  const double inlier_ratio = static_cast<double>(n_inliers) / image_pts0.cols();
+  LOG(INFO) << "Inlier ratio: " << inlier_ratio;
+
+  EXPECT_GT(inlier_ratio, 0.95);
+}
+
+TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservationsWithOutliers) {
+  const size_t data_seed = 7;
+  std::mt19937 rng(data_seed);
+  const double pixel_noise = 2.0;
+  std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
+
+  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+
+  for (int i = 0; i < image_pts1.cols(); i++) {
+    noisy_image_pts1(0, i) += gaussian_noise(rng);
+    noisy_image_pts1(1, i) += gaussian_noise(rng);
+  }
+
+  const double inlier_prob = 0.75;
+  std::uniform_real_distribution<double> x_dist(0., dataset.cameras[0].size[0]);
+  std::uniform_real_distribution<double> y_dist(0., dataset.cameras[0].size[1]);
+  std::uniform_real_distribution<double> inlier_dist(0., 1.0);
+
+  size_t n_outliers = 0;
+
+  for (int i = 0; i < image_pts0.cols(); i++) {
+    if (inlier_dist(rng) < inlier_prob) {
+      continue;
+    }
+
+    n_outliers++;
+
+    noisy_image_pts1(0, i) = x_dist(rng);
+    noisy_image_pts1(1, i) = y_dist(rng);
+  }
+
+  LOG(INFO) << "N outliers: " << n_outliers;
+  const double inlier_ratio_in_sample =
+      static_cast<double>(noisy_image_pts1.cols() - n_outliers) / noisy_image_pts1.cols();
+
+  const double inlier_thr = pixel_noise * 5.99;
+  Eigen::Matrix<double, 3, 4> P =
+      findProjectionMatrixRansac(world_pts, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
+
+  auto distance = ProjectionEstimatorRansacSpec::distance(world_pts, image_pts1, P);
+
+  const size_t n_inliers = (distance.array() < inlier_thr * inlier_thr).count();
+  const double inlier_ratio = static_cast<double>(n_inliers) / image_pts0.cols();
+  LOG(INFO) << "Inlier ratio: " << inlier_ratio;
+
+  EXPECT_GT(inlier_ratio, 0.95);
+
+  auto noisy_distance = ProjectionEstimatorRansacSpec::distance(world_pts, noisy_image_pts1, P);
+
+  const size_t noisy_n_inliers = (noisy_distance.array() < inlier_thr * inlier_thr).count();
+  const double noisy_inlier_ratio = static_cast<double>(noisy_n_inliers) / noisy_image_pts1.cols();
+  LOG(INFO) << "Noisy_inlier ratio: " << noisy_inlier_ratio;
+
+  EXPECT_LE(noisy_inlier_ratio, inlier_ratio_in_sample);
+  EXPECT_GT(inlier_ratio, 0.95 * inlier_ratio_in_sample);
+}
+
+TEST_F(CalibUtilsTestFixture, TriangulatePoints) {
+  auto triangulated_pts = triangulatePoints(image_pts0, image_pts1, P0, P1);
+
+  EXPECT_TRUE((triangulated_pts - world_pts).colwise().squaredNorm().isZero());
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   ::google::InitGoogleLogging(argv[0]);
 
-  FLAGS_logtostderr = 1;
+  FLAGS_logtostderr = true;
   FLAGS_minloglevel = 0;
 
   int result = RUN_ALL_TESTS();
