@@ -37,8 +37,7 @@ Eigen::Vector<double, DerivedSrc::ColsAtCompileTime> sampsonDistanceFromFundamen
     Eigen::Vector3d dst = dst_points.col(i).homogeneous();
 
     double numerator = (dst.transpose() * F * src).squaredNorm();
-    double denominator =
-        (F.topRows<2>() * src).squaredNorm() + (F.transpose().topRows<2>() * dst).squaredNorm();
+    double denominator = (F.topRows<2>() * src).squaredNorm() + (F.transpose().topRows<2>() * dst).squaredNorm();
     distances(i) = numerator / denominator;
   }
 
@@ -70,23 +69,32 @@ Eigen::Vector<double, DerivedSrc::ColsAtCompileTime> symmetricEpipolarDistance(
 }
 
 template <class Derived>
-void normalizePoints(
-    const Eigen::DenseBase<Derived>& points,
-    Eigen::Matrix<double, Derived::RowsAtCompileTime + 1, Derived::ColsAtCompileTime>& X_normed,
-    Eigen::Matrix<double, Derived::RowsAtCompileTime + 1, Derived::RowsAtCompileTime + 1>& T) {
+void normalizePoints(const Eigen::DenseBase<Derived>& points,
+                     Eigen::Matrix<double, Derived::RowsAtCompileTime + 1, Derived::ColsAtCompileTime>& X_normed,
+                     Eigen::Matrix<double, Derived::RowsAtCompileTime + 1, Derived::RowsAtCompileTime + 1>& T) {
   constexpr size_t Dim = Derived::RowsAtCompileTime;
 
   Eigen::Vector<double, Dim> centroid = points.rowwise().mean();
   double rms_dist = std::sqrt((points.colwise() - centroid).colwise().squaredNorm().mean());
   double scaling_param = rms_dist / std::sqrt(Dim);
 
-  Eigen::Matrix<double, Dim + 1, Dim + 1> T_inv =
-      Eigen::Matrix<double, Dim + 1, Dim + 1>::Identity();
+  Eigen::Matrix<double, Dim + 1, Dim + 1> T_inv = Eigen::Matrix<double, Dim + 1, Dim + 1>::Identity();
   T_inv.template topLeftCorner<Dim, Dim>().diagonal().setConstant(scaling_param);
   T_inv.template topRightCorner<Dim, 1>() = centroid;
   T = T_inv.inverse();
 
   X_normed = T * points.colwise().homogeneous();
+}
+
+template <class Derived>
+Eigen::Matrix<double, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime> normalizeMatrix(
+    const Eigen::DenseBase<Derived>& matrix) {
+  const double norm = matrix.reshaped().norm();
+  const double desired_norm = std::sqrt(static_cast<double>(matrix.cols() * matrix.rows()));
+
+  const double scale = desired_norm / norm;
+
+  return matrix.derived() * scale;
 }
 
 template <class DerivedSrc, class DerivedDst>
@@ -119,8 +127,7 @@ Eigen::Matrix3d findFundamentalMatrix(const Eigen::DenseBase<DerivedSrc>& src_po
   Eigen::Vector3d F_singular_vals = svd_F.singularValues();
   F_singular_vals[2] = 0.;
 
-  Eigen::Matrix3d F = svd_F.matrixU() * Eigen::DiagonalMatrix<double, 3>(F_singular_vals) *
-                      svd_F.matrixV().transpose();
+  Eigen::Matrix3d F = svd_F.matrixU() * Eigen::DiagonalMatrix<double, 3>(F_singular_vals) * svd_F.matrixV().transpose();
   F = T_dst.transpose() * F * T_src;
   F /= F(2, 2);
 
@@ -134,16 +141,14 @@ struct FMEstimatorRansacSpec {
   static constexpr size_t Dim2 = 2;
 
   template <class Derived1, class Derived2>
-  static ModelMatrix fitModel(const Eigen::DenseBase<Derived1>& points1,
-                              const Eigen::DenseBase<Derived2>& points2) {
+  static ModelMatrix fitModel(const Eigen::DenseBase<Derived1>& points1, const Eigen::DenseBase<Derived2>& points2) {
     return findFundamentalMatrix(points1, points2);
   }
 
   template <class Derived1, class Derived2>
-  static Eigen::Vector<double, Derived1::ColsAtCompileTime> distance(
-      const Eigen::DenseBase<Derived1>& points1,
-      const Eigen::DenseBase<Derived2>& points2,
-      const ModelMatrix& model) {
+  static Eigen::Vector<double, Derived1::ColsAtCompileTime> distance(const Eigen::DenseBase<Derived1>& points1,
+                                                                     const Eigen::DenseBase<Derived2>& points2,
+                                                                     const ModelMatrix& model) {
     return symmetricEpipolarDistance(points1, points2, model);
   }
 };
@@ -155,8 +160,7 @@ Eigen::Matrix3d findFundamentalMatrixRansac(const Eigen::DenseBase<DerivedSrc>& 
                                             double confidence,
                                             size_t max_iters,
                                             size_t seed) {
-  return RansacEngine<FMEstimatorRansacSpec>::fit(
-      src_points, dst_points, ransac_thr, confidence, max_iters, seed);
+  return RansacEngine<FMEstimatorRansacSpec>::fit(src_points, dst_points, ransac_thr, confidence, max_iters, seed);
 }
 
 template <class Derived3D, class Derived2D>
@@ -177,9 +181,8 @@ Eigen::Matrix<double, 3, 4> findProjectionMatrix(const Eigen::DenseBase<Derived3
   normalizePoints(world_points, world_points_normed, T_world);
   normalizePoints(image_points, image_points_normed, T_image);
 
-  constexpr auto ARows = (Derived3D::ColsAtCompileTime == Eigen::Dynamic)
-                             ? Eigen::Dynamic
-                             : 2 * Derived3D::ColsAtCompileTime;
+  constexpr auto ARows =
+      (Derived3D::ColsAtCompileTime == Eigen::Dynamic) ? Eigen::Dynamic : 2 * Derived3D::ColsAtCompileTime;
   Eigen::Matrix<double, ARows, 12> A(n_points * 2, 12);
   A.setZero();
 
@@ -194,7 +197,7 @@ Eigen::Matrix<double, 3, 4> findProjectionMatrix(const Eigen::DenseBase<Derived3
   Eigen::Matrix<double, 3, 4> P = svd_A.matrixV().col(11).template reshaped<Eigen::RowMajor>(3, 4);
   P = T_image.inverse() * P * T_world;
 
-  return P;
+  return normalizeMatrix(P);
 }
 
 struct ProjectionEstimatorRansacSpec {
@@ -204,40 +207,35 @@ struct ProjectionEstimatorRansacSpec {
   static constexpr size_t Dim2 = 2;
 
   template <class Derived1, class Derived2>
-  static ModelMatrix fitModel(const Eigen::DenseBase<Derived1>& points1,
-                              const Eigen::DenseBase<Derived2>& points2) {
+  static ModelMatrix fitModel(const Eigen::DenseBase<Derived1>& points1, const Eigen::DenseBase<Derived2>& points2) {
     return findProjectionMatrix(points1, points2);
   }
 
   template <class Derived1, class Derived2>
-  static Eigen::Vector<double, Derived1::ColsAtCompileTime> distance(
-      const Eigen::DenseBase<Derived1>& points1,
-      const Eigen::DenseBase<Derived2>& points2,
-      const ModelMatrix& model) {
-    auto reprojected_points =
-        (model * points1.colwise().homogeneous()).colwise().hnormalized().eval();
+  static Eigen::Vector<double, Derived1::ColsAtCompileTime> distance(const Eigen::DenseBase<Derived1>& points1,
+                                                                     const Eigen::DenseBase<Derived2>& points2,
+                                                                     const ModelMatrix& model) {
+    auto reprojected_points = (model * points1.colwise().homogeneous()).colwise().hnormalized().eval();
     return (reprojected_points - points2.derived()).colwise().squaredNorm();
   }
 };
 
 template <class Derived3D, class Derived2D>
-Eigen::Matrix<double, 3, 4> findProjectionMatrixRansac(
-    const Eigen::DenseBase<Derived3D>& world_points,
-    const Eigen::DenseBase<Derived2D>& image_points,
-    double ransac_thr,
-    double confidence,
-    size_t max_iters,
-    size_t seed) {
+Eigen::Matrix<double, 3, 4> findProjectionMatrixRansac(const Eigen::DenseBase<Derived3D>& world_points,
+                                                       const Eigen::DenseBase<Derived2D>& image_points,
+                                                       double ransac_thr,
+                                                       double confidence,
+                                                       size_t max_iters,
+                                                       size_t seed) {
   return RansacEngine<ProjectionEstimatorRansacSpec>::fit(
       world_points, image_points, ransac_thr, confidence, max_iters, seed);
 }
 
 template <class Derived1, class Derived2>
-Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> triangulatePoints(
-    const Eigen::DenseBase<Derived1>& image_points1,
-    const Eigen::DenseBase<Derived2>& image_points2,
-    const Eigen::Matrix<double, 3, 4>& P1,
-    const Eigen::Matrix<double, 3, 4>& P2) {
+Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> triangulatePoints(const Eigen::DenseBase<Derived1>& image_points1,
+                                                                        const Eigen::DenseBase<Derived2>& image_points2,
+                                                                        const Eigen::Matrix<double, 3, 4>& P1,
+                                                                        const Eigen::Matrix<double, 3, 4>& P2) {
   static_assert(Derived1::RowsAtCompileTime == 2);
   static_assert(Derived2::RowsAtCompileTime == 2);
   CHECK_EQ(image_points1.cols(), image_points2.cols());

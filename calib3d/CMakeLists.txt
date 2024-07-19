@@ -37,7 +37,10 @@ target_link_libraries(calib3d
 enable_testing()
 
 add_executable(test_calib3d
-    tests/test_calib_utils.cpp)
+    tests/test_main.cpp
+    tests/test_calib_utils.cpp
+    tests/test_three_view_reconstruction.cpp
+)
 
 set(DATASET_FILE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../data/accurate-calibrations-and-accurate-world-points.json")
 target_compile_definitions(test_calib3d PRIVATE DATASET_FILE_PATH="${DATASET_FILE_PATH}")

@@ -1,59 +1,68 @@
 #pragma once
 
 #include <Eigen/Core>
-#include <array>
 #include <map>
+#include <utility>
 #include <vector>
 
 #include <calib3d/types.h>
 
 namespace calib3d {
 
+struct ThreeViewReconstructionParams {
+  double observation_noise = 3.0;
+};
+
 class ThreeViewReconstruction {
 public:
-  ThreeViewReconstruction(const CameraSize& cam0_size,
-                          const CameraSize& cam1_size,
-                          const CameraSize& cam2_size,
-                          double observation_noise);
+  explicit ThreeViewReconstruction(const ThreeViewReconstructionParams& params);
 
-  void reconstruct(const Observations& cam0_obs,
+  [[nodiscard]] const std::map<CamId, CameraCalib>& getCameras() const;
+  [[nodiscard]] const std::map<PointId, PointData>& getPoints() const;
+
+  void reconstruct(CamId cam0_id,
+                   const CameraSize& cam0_size,
+                   const Observations& cam0_obs,
+                   CamId cam1_id,
+                   const CameraSize& cam1_size,
                    const Observations& cam1_obs,
+                   CamId cam2_id,
+                   const CameraSize& cam2_size,
                    const Observations& cam2_obs);
 
+protected:
+  void insertCameraData(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs);
+
 private:
-  void prepareCommonObservations(const Observations& cam0_obs,
-                                 const Observations& cam1_obs,
-                                 const Observations& cam2_obs);
+  void performThreeViewReconstruction();
 
-  void performProjectiveReconstruction();
-  static Eigen::Matrix<double, 3, 4> getProjectionMatrixFromFundamentalMatrix(
-      const Eigen::Matrix3d& F);
+  [[nodiscard]] std::pair<std::vector<PointId>, ThreeOf<Mat2X>> prepareCommonObservations() const;
 
-  void performMetricRectification();
-  [[nodiscard]] Eigen::Matrix4d findAbsoluteDualQuadratic() const;
-  void findCameraMatrices(const Eigen::Matrix4d& ADQ);
-  [[nodiscard]] Eigen::Matrix4d findRectificationHomography(const Eigen::Matrix4d& ADQ) const;
-  void transformReconstruction(const Eigen::Matrix4d& H);
+  [[nodiscard]] std::pair<ThreeOf<Mat3x4>, Mat3X> performProjectiveReconstruction(
+      const ThreeOf<Mat2X>& image_pts) const;
+  [[nodiscard]] static Mat3x4 getProjectionMatrixFromFundamentalMatrix(const Mat3& F);
 
-  void recoverCameraCalibrations();
+  static ThreeOf<Mat3> performMetricRectification(ThreeOf<Mat3x4>& P, Mat3X& world_pts);
+  [[nodiscard]] static Mat4 findAbsoluteDualQuadratic(const ThreeOf<Mat3x4>& P);
+  [[nodiscard]] static ThreeOf<Mat3> findCameraMatrices(const Mat4& ADQ, const ThreeOf<Mat3x4>& P);
+  [[nodiscard]] static Mat4 findRectifyingHomography(const Mat4& ADQ,
+                                                     const Mat3& K0,
+                                                     const ThreeOf<Mat3x4>& P,
+                                                     const Mat3X& world_pts);
+  static void transformReconstruction(const Mat4& H, ThreeOf<Mat3x4>& P, Mat3X& world_pts);
 
-  void prepareFinalReconstruction(const Observations& cam0_obs,
-                                  const Observations& cam1_obs,
-                                  const Observations& cam2_obs);
+  void recoverCameraCalibrations(const ThreeOf<Mat3x4>& P, const ThreeOf<Mat3>& K);
 
-  double observation_noise_;
-  std::array<CameraSize, 3> cam_sizes_;
-  std::vector<size_t> common_pt_ids_;
-  std::array<Eigen::Matrix2Xd, 3> image_pts_;
-  Eigen::Matrix3Xd world_pts_;
+  void writeBackWorldPoints(const std::vector<PointId>& common_pt_ids, const Mat3X& world_pts);
 
-  std::array<Eigen::Matrix<double, 3, 4>, 3> P_;
-  std::array<Eigen::Matrix3d, 3> K_;
-  std::array<Eigen::Matrix3d, 3> R_;
-  std::array<Eigen::Vector3d, 3> t_;
+  void triangulateRemainingPoints();
 
-  std::array<CameraCalib, 3> camera_calib_;
-  std::map<size_t, Eigen::Vector3d> reconstruction_;
+protected:
+  std::map<CamId, CameraCalib> cameras_;
+  std::map<PointId, PointData> points_;
+
+private:
+  const ThreeViewReconstructionParams& params_;
 };
 
 } // namespace calib3d

@@ -12,33 +12,32 @@ class CalibUtilsTestFixture : public ::testing::Test {
 protected:
   Dataset dataset;
 
-  Eigen::Matrix3d K0, K1;
-  Eigen::Matrix4d world2cam0, world2cam1;
-  Eigen::Matrix<double, 3, 4> P0, P1;
-  Eigen::Matrix3d F01;
+  Mat3 K0, K1;
+  Mat4 world2cam0, world2cam1;
+  Mat3x4 P0, P1;
+  Mat3 F01;
 
   std::vector<size_t> common_pt_ids;
-  Eigen::Matrix2Xd image_pts0, image_pts1;
-  Eigen::Matrix3Xd world_pts;
+  Mat2X image_pts0, image_pts1;
+  Mat3X world_pts;
 
   void SetUp() override {
     ASSERT_TRUE(loadJsonDataset(DATASET_FILE_PATH, dataset));
     ASSERT_FALSE(dataset.cameras.empty());
     ASSERT_FALSE(dataset.world_points.empty());
 
-    K0 = dataset.cameras[0].intrinsics.K();
-    K1 = dataset.cameras[1].intrinsics.K();
+    K0 = dataset.cameras[0].calib.intrinsics.K();
+    K1 = dataset.cameras[1].calib.intrinsics.K();
 
-    world2cam0 = dataset.cameras[0].extrinsics.matrix();
-    world2cam1 = dataset.cameras[1].extrinsics.matrix();
+    world2cam0 = dataset.cameras[0].calib.extrinsics.matrix();
+    world2cam1 = dataset.cameras[1].calib.extrinsics.matrix();
 
     P0 = K0 * world2cam0.topRows<3>();
     P1 = K1 * world2cam1.topRows<3>();
 
     Eigen::Matrix<double, 4, 3> P0_pinv = P0.completeOrthogonalDecomposition().pseudoInverse();
-    Eigen::Vector4d cam0_center =
-        Eigen::JacobiSVD(P0, Eigen::ComputeFullV).matrixV().rightCols<1>();
-    Eigen::Vector3d left_epipole = P1 * cam0_center;
+    Vec4 cam0_center = Eigen::JacobiSVD(P0, Eigen::ComputeFullV).matrixV().rightCols<1>();
+    Vec3 left_epipole = P1 * cam0_center;
 
     F01 = skewSymmetric(left_epipole) * P1 * P0_pinv;
     F01 /= F01(2, 2);
@@ -76,19 +75,19 @@ TEST_F(CalibUtilsTestFixture, NormalizePoints2D) {
   {
     // Dynamic size input
 
-    Eigen::Matrix3Xd pts_normed;
-    Eigen::Matrix3d T;
+    Mat3X pts_normed;
+    Mat3 T;
     normalizePoints(image_pts0, pts_normed, T);
 
     EXPECT_TRUE(pts_normed.row(2).isApproxToConstant(1., epsilon));
 
-    Eigen::Vector2d mean = pts_normed.topRows<2>().rowwise().mean();
+    Vec2 mean = pts_normed.topRows<2>().rowwise().mean();
     EXPECT_TRUE(mean.isZero(epsilon));
 
     double rms = std::sqrt(pts_normed.topRows<2>().array().square().colwise().sum().mean());
     EXPECT_NEAR(rms, std::sqrt(2), epsilon);
 
-    Eigen::Matrix3d Tinv = T.inverse();
+    Mat3 Tinv = T.inverse();
     EXPECT_TRUE((Tinv * pts_normed).topRows<2>().isApprox(image_pts0, epsilon));
   }
 
@@ -97,40 +96,39 @@ TEST_F(CalibUtilsTestFixture, NormalizePoints2D) {
 
     Eigen::Matrix<double, 2, 4> fixed_matrix = image_pts0.leftCols<4>();
 
-    Eigen::Matrix<double, 3, 4> pts_normed;
-    Eigen::Matrix3d T;
+    Mat3x4 pts_normed;
+    Mat3 T;
     normalizePoints(fixed_matrix, pts_normed, T);
 
     EXPECT_TRUE(pts_normed.row(2).isApproxToConstant(1., epsilon));
 
-    Eigen::Vector2d mean = pts_normed.topRows<2>().rowwise().mean();
+    Vec2 mean = pts_normed.topRows<2>().rowwise().mean();
     EXPECT_TRUE(mean.isZero(epsilon));
 
     double rms = std::sqrt(pts_normed.topRows<2>().array().square().colwise().sum().mean());
     EXPECT_NEAR(rms, std::sqrt(2), epsilon);
 
-    Eigen::Matrix3d Tinv = T.inverse();
+    Mat3 Tinv = T.inverse();
     EXPECT_TRUE((Tinv * pts_normed).topRows<2>().isApprox(fixed_matrix, epsilon));
   }
 
   {
     // Matrix-expression input
 
-    Eigen::Matrix<double, 3, 4> pts_normed;
-    Eigen::Matrix3d T;
+    Mat3x4 pts_normed;
+    Mat3 T;
     normalizePoints(image_pts0(Eigen::all, {2, 4, 7, 11}), pts_normed, T);
 
     EXPECT_TRUE(pts_normed.row(2).isApproxToConstant(1., epsilon));
 
-    Eigen::Vector2d mean = pts_normed.topRows<2>().rowwise().mean();
+    Vec2 mean = pts_normed.topRows<2>().rowwise().mean();
     EXPECT_TRUE(mean.isZero(epsilon));
 
     double rms = std::sqrt(pts_normed.topRows<2>().array().square().colwise().sum().mean());
     EXPECT_NEAR(rms, std::sqrt(2), epsilon);
 
-    Eigen::Matrix3d Tinv = T.inverse();
-    EXPECT_TRUE(
-        (Tinv * pts_normed).topRows<2>().isApprox(image_pts0(Eigen::all, {2, 4, 7, 11}), epsilon));
+    Mat3 Tinv = T.inverse();
+    EXPECT_TRUE((Tinv * pts_normed).topRows<2>().isApprox(image_pts0(Eigen::all, {2, 4, 7, 11}), epsilon));
   }
 }
 
@@ -140,61 +138,60 @@ TEST_F(CalibUtilsTestFixture, NormalizePoints3D) {
   {
     // Dynamic size input
 
-    Eigen::Matrix4Xd pts_normed;
-    Eigen::Matrix4d T;
+    Mat4X pts_normed;
+    Mat4 T;
     normalizePoints(world_pts, pts_normed, T);
 
     EXPECT_TRUE(pts_normed.row(3).isApproxToConstant(1., epsilon));
 
-    Eigen::Vector3d mean = pts_normed.topRows<3>().rowwise().mean();
+    Vec3 mean = pts_normed.topRows<3>().rowwise().mean();
     EXPECT_TRUE(mean.isZero(epsilon));
 
     double rms = std::sqrt(pts_normed.topRows<3>().array().square().colwise().sum().mean());
     EXPECT_NEAR(rms, std::sqrt(3), epsilon);
 
-    Eigen::Matrix4d Tinv = T.inverse();
+    Mat4 Tinv = T.inverse();
     EXPECT_TRUE((Tinv * pts_normed).topRows<3>().isApprox(world_pts, epsilon));
   }
 
   {
     // Fixed size input
 
-    Eigen::Matrix<double, 3, 4> fixed_matrix = world_pts.leftCols<4>();
+    Mat3x4 fixed_matrix = world_pts.leftCols<4>();
 
-    Eigen::Matrix<double, 4, 4> pts_normed;
-    Eigen::Matrix4d T;
+    Mat4 pts_normed;
+    Mat4 T;
     normalizePoints(fixed_matrix, pts_normed, T);
 
     EXPECT_TRUE(pts_normed.row(3).isApproxToConstant(1., epsilon));
 
-    Eigen::Vector3d mean = pts_normed.topRows<3>().rowwise().mean();
+    Vec3 mean = pts_normed.topRows<3>().rowwise().mean();
     EXPECT_TRUE(mean.isZero(epsilon));
 
     double rms = std::sqrt(pts_normed.topRows<3>().array().square().colwise().sum().mean());
     EXPECT_NEAR(rms, std::sqrt(3), epsilon);
 
-    Eigen::Matrix4d Tinv = T.inverse();
+    Mat4 Tinv = T.inverse();
     EXPECT_TRUE((Tinv * pts_normed).topRows<3>().isApprox(fixed_matrix, epsilon));
   }
 
   {
     // Matrix-expression input
 
-    Eigen::Matrix<double, 4, 4> pts_normed;
-    Eigen::Matrix4d T;
+    Mat4 pts_normed;
+    Mat4 T;
     normalizePoints(world_pts(Eigen::all, {2, 4, 7, 11}), pts_normed, T);
 
     EXPECT_TRUE(pts_normed.row(3).isApproxToConstant(1., epsilon));
 
-    Eigen::Vector3d mean = pts_normed.topRows<3>().rowwise().mean();
+    Vec3 mean = pts_normed.topRows<3>().rowwise().mean();
     EXPECT_TRUE(mean.isZero(epsilon));
 
     double rms = std::sqrt(pts_normed.topRows<3>().array().square().colwise().sum().mean());
     EXPECT_NEAR(rms, std::sqrt(3), epsilon);
 
-    Eigen::Matrix4d Tinv = T.inverse();
-    EXPECT_TRUE(
-        (Tinv * pts_normed).topRows<3>().isApprox(world_pts(Eigen::all, {2, 4, 7, 11}), epsilon));
+    Mat4 Tinv = T.inverse();
+    EXPECT_TRUE((Tinv * pts_normed).topRows<3>().isApprox(world_pts(Eigen::all, {2, 4, 7, 11}), epsilon));
   }
 }
 
@@ -203,8 +200,8 @@ TEST_F(CalibUtilsTestFixture, DISABLED_SampsonDistance) {
   std::mt19937 rng(data_seed);
   std::normal_distribution<double> gaussian_noise(0.0, 3.0); // very small noise
 
-  Eigen::Matrix2Xd noisy_image_pts0 = image_pts0;
-  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+  Mat2X noisy_image_pts0 = image_pts0;
+  Mat2X noisy_image_pts1 = image_pts1;
 
   for (int i = 0; i < image_pts0.cols(); i++) {
     noisy_image_pts0(0, i) += gaussian_noise(rng);
@@ -213,8 +210,8 @@ TEST_F(CalibUtilsTestFixture, DISABLED_SampsonDistance) {
     noisy_image_pts1(1, i) += gaussian_noise(rng);
   }
 
-  Eigen::Matrix2Xd noise0 = noisy_image_pts0 - image_pts0;
-  Eigen::Matrix2Xd noise1 = noisy_image_pts1 - image_pts1;
+  Mat2X noise0 = noisy_image_pts0 - image_pts0;
+  Mat2X noise1 = noisy_image_pts1 - image_pts1;
 
   auto sampson_dist = sampsonDistanceFromFundamentalMatrix(noisy_image_pts0, noisy_image_pts1, F01);
   auto epipolar_dist = symmetricEpipolarDistance(noisy_image_pts0, noisy_image_pts1, F01);
@@ -230,7 +227,7 @@ TEST_F(CalibUtilsTestFixture, DISABLED_SampsonDistance) {
 }
 
 TEST_F(CalibUtilsTestFixture, FindFundamentalMatrix) {
-  Eigen::Matrix3d F = findFundamentalMatrix(image_pts0, image_pts1);
+  Mat3 F = findFundamentalMatrix(image_pts0, image_pts1);
   EXPECT_TRUE(F.isApprox(F01, 1e-8));
 }
 
@@ -240,8 +237,8 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixNoisyObservations) {
   const double pixel_noise = 2.0;
   std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
 
-  Eigen::Matrix2Xd noisy_image_pts0 = image_pts0;
-  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+  Mat2X noisy_image_pts0 = image_pts0;
+  Mat2X noisy_image_pts1 = image_pts1;
 
   for (int i = 0; i < image_pts0.cols(); i++) {
     noisy_image_pts0(0, i) += gaussian_noise(rng);
@@ -251,7 +248,7 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixNoisyObservations) {
   }
 
   const double inlier_thr = pixel_noise * 5.99;
-  Eigen::Matrix3d F = findFundamentalMatrix(noisy_image_pts0, noisy_image_pts1);
+  Mat3 F = findFundamentalMatrix(noisy_image_pts0, noisy_image_pts1);
 
   auto distance = symmetricEpipolarDistance(image_pts0, image_pts1, F);
 
@@ -264,8 +261,7 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixNoisyObservations) {
 
 TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacAccurateObservations) {
   const size_t ransac_seed = 42;
-  Eigen::Matrix3d F =
-      findFundamentalMatrixRansac(image_pts0, image_pts1, 5.0, 0.99, 1000, ransac_seed);
+  Mat3 F = findFundamentalMatrixRansac(image_pts0, image_pts1, 5.0, 0.99, 1000, ransac_seed);
   EXPECT_TRUE(F.isApprox(F01, 1e-8));
 }
 
@@ -275,8 +271,8 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservations) {
   const double pixel_noise = 2.0;
   std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
 
-  Eigen::Matrix2Xd noisy_image_pts0 = image_pts0;
-  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+  Mat2X noisy_image_pts0 = image_pts0;
+  Mat2X noisy_image_pts1 = image_pts1;
 
   for (int i = 0; i < image_pts0.cols(); i++) {
     noisy_image_pts0(0, i) += gaussian_noise(rng);
@@ -286,8 +282,7 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservations) {
   }
 
   const double inlier_thr = pixel_noise * 5.99;
-  Eigen::Matrix3d F = findFundamentalMatrixRansac(
-      noisy_image_pts0, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
+  Mat3 F = findFundamentalMatrixRansac(noisy_image_pts0, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
 
   auto distance = symmetricEpipolarDistance(image_pts0, image_pts1, F);
 
@@ -304,8 +299,8 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservationsWithOu
   const double pixel_noise = 2.0;
   std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
 
-  Eigen::Matrix2Xd noisy_image_pts0 = image_pts0;
-  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+  Mat2X noisy_image_pts0 = image_pts0;
+  Mat2X noisy_image_pts1 = image_pts1;
 
   for (int i = 0; i < image_pts0.cols(); i++) {
     noisy_image_pts0(0, i) += gaussian_noise(rng);
@@ -315,8 +310,8 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservationsWithOu
   }
 
   const double inlier_prob = 0.75;
-  std::uniform_real_distribution<double> x_dist(0., dataset.cameras[0].size[0]);
-  std::uniform_real_distribution<double> y_dist(0., dataset.cameras[0].size[1]);
+  std::uniform_real_distribution<double> x_dist(0., dataset.cameras[0].calib.size[0]);
+  std::uniform_real_distribution<double> y_dist(0., dataset.cameras[0].calib.size[1]);
   std::uniform_real_distribution<double> inlier_dist(0., 1.0);
 
   size_t n_outliers = 0;
@@ -339,8 +334,7 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservationsWithOu
       static_cast<double>(noisy_image_pts0.cols() - n_outliers) / noisy_image_pts0.cols();
 
   const double inlier_thr = pixel_noise * 5.99;
-  Eigen::Matrix3d F = findFundamentalMatrixRansac(
-      noisy_image_pts0, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
+  Mat3 F = findFundamentalMatrixRansac(noisy_image_pts0, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
 
   auto distance = symmetricEpipolarDistance(image_pts0, image_pts1, F);
 
@@ -361,7 +355,7 @@ TEST_F(CalibUtilsTestFixture, FindFundamentalMatrixRansacNoisyObservationsWithOu
 }
 
 TEST_F(CalibUtilsTestFixture, FindProjectionMatrix) {
-  Eigen::Matrix<double, 3, 4> P = findProjectionMatrix(world_pts, image_pts1);
+  Mat3x4 P = findProjectionMatrix(world_pts, image_pts1);
   P /= P(0, 0);
   P1 /= P1(0, 0);
 
@@ -370,8 +364,7 @@ TEST_F(CalibUtilsTestFixture, FindProjectionMatrix) {
 
 TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacAccurateCorrespondences) {
   const size_t ransac_seed = 42;
-  Eigen::Matrix<double, 3, 4> P =
-      findProjectionMatrixRansac(world_pts, image_pts1, 5.0, 0.99, 1000, ransac_seed);
+  Mat3x4 P = findProjectionMatrixRansac(world_pts, image_pts1, 5.0, 0.99, 1000, ransac_seed);
   P /= P(0, 0);
   P1 /= P1(0, 0);
 
@@ -384,7 +377,7 @@ TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservations) {
   const double pixel_noise = 2.0;
   std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
 
-  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+  Mat2X noisy_image_pts1 = image_pts1;
 
   for (int i = 0; i < image_pts1.cols(); i++) {
     noisy_image_pts1(0, i) += gaussian_noise(rng);
@@ -392,8 +385,7 @@ TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservations) {
   }
 
   const double inlier_thr = pixel_noise * 5.99;
-  Eigen::Matrix<double, 3, 4> P =
-      findProjectionMatrixRansac(world_pts, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
+  Mat3x4 P = findProjectionMatrixRansac(world_pts, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
 
   auto distance = ProjectionEstimatorRansacSpec::distance(world_pts, image_pts1, P);
 
@@ -410,7 +402,7 @@ TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservationsWithOut
   const double pixel_noise = 2.0;
   std::normal_distribution<double> gaussian_noise(0.0, pixel_noise);
 
-  Eigen::Matrix2Xd noisy_image_pts1 = image_pts1;
+  Mat2X noisy_image_pts1 = image_pts1;
 
   for (int i = 0; i < image_pts1.cols(); i++) {
     noisy_image_pts1(0, i) += gaussian_noise(rng);
@@ -418,8 +410,8 @@ TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservationsWithOut
   }
 
   const double inlier_prob = 0.75;
-  std::uniform_real_distribution<double> x_dist(0., dataset.cameras[0].size[0]);
-  std::uniform_real_distribution<double> y_dist(0., dataset.cameras[0].size[1]);
+  std::uniform_real_distribution<double> x_dist(0., dataset.cameras[0].calib.size[0]);
+  std::uniform_real_distribution<double> y_dist(0., dataset.cameras[0].calib.size[1]);
   std::uniform_real_distribution<double> inlier_dist(0., 1.0);
 
   size_t n_outliers = 0;
@@ -440,8 +432,7 @@ TEST_F(CalibUtilsTestFixture, FindProjectionMatrixRansacNoisyObservationsWithOut
       static_cast<double>(noisy_image_pts1.cols() - n_outliers) / noisy_image_pts1.cols();
 
   const double inlier_thr = pixel_noise * 5.99;
-  Eigen::Matrix<double, 3, 4> P =
-      findProjectionMatrixRansac(world_pts, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
+  Mat3x4 P = findProjectionMatrixRansac(world_pts, noisy_image_pts1, inlier_thr, 0.99, 1000, data_seed);
 
   auto distance = ProjectionEstimatorRansacSpec::distance(world_pts, image_pts1, P);
 
@@ -465,18 +456,4 @@ TEST_F(CalibUtilsTestFixture, TriangulatePoints) {
   auto triangulated_pts = triangulatePoints(image_pts0, image_pts1, P0, P1);
 
   EXPECT_TRUE((triangulated_pts - world_pts).colwise().squaredNorm().isZero());
-}
-
-int main(int argc, char** argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  ::google::InitGoogleLogging(argv[0]);
-
-  FLAGS_logtostderr = true;
-  FLAGS_minloglevel = 0;
-
-  int result = RUN_ALL_TESTS();
-
-  google::ShutdownGoogleLogging();
-
-  return result;
 }

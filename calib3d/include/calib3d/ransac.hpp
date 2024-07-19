@@ -54,8 +54,7 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
         LOG(INFO) << "Inlier ratio: " << inlier_ratio;
 
         auto new_max_iters = static_cast<size_t>(
-            std::ceil(std::log(1. - confidence) /
-                      std::log(1. - std::pow(inlier_ratio, Spec::MinSampleSize))));
+            std::ceil(std::log(1. - confidence) / std::log(1. - std::pow(inlier_ratio, Spec::MinSampleSize))));
         if (new_max_iters < max_iters) {
           max_iters = new_max_iters;
           LOG(INFO) << "New max iters: " << max_iters;
@@ -67,8 +66,7 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
   LOG(INFO) << "Final estimation using " << consensus_set_ids.size()
             << " inliers with stddev: " << consensus_set_stddev;
 
-  return Spec::template fitModel(points1(Eigen::all, consensus_set_ids),
-                                 points2(Eigen::all, consensus_set_ids));
+  return Spec::template fitModel(points1(Eigen::all, consensus_set_ids), points2(Eigen::all, consensus_set_ids));
 }
 
 template <class Spec>
@@ -90,10 +88,8 @@ auto RansacEngine<Spec>::getRandomSample(const Eigen::DenseBase<Derived1>& point
 }
 
 template <class Spec>
-std::vector<size_t> RansacEngine<Spec>::fromBinMask(
-    const Eigen::Array<bool, Eigen::Dynamic, 1>& mask) {
-  auto indices = std::views::iota(0, mask.size()) |
-                 std::views::filter([&mask](const auto& i) { return mask(i); });
+std::vector<size_t> RansacEngine<Spec>::fromBinMask(const Eigen::Array<bool, Eigen::Dynamic, 1>& mask) {
+  auto indices = std::views::iota(0, mask.size()) | std::views::filter([&mask](const auto& i) { return mask(i); });
   std::vector<size_t> result;
   std::ranges::copy(indices, std::back_inserter(result));
   return result;

@@ -15,57 +15,58 @@ bool loadJsonDataset(const std::string& filename, Dataset& dataset) {
   }
 
   try {
-    nlohmann::json json_data;
-    file >> json_data;
+    nlohmann::json root_json;
+    file >> root_json;
 
-    for (const auto& [cam_id_str, camera_data] : json_data["cameras"].items()) {
+    for (const auto& [cam_id_str, camera_json] : root_json["cameras"].items()) {
       size_t cam_id = std::stoul(cam_id_str);
 
       CameraBundle bundle;
+      auto& calib = bundle.calib;
 
-      const auto& calib_data = camera_data["calib"];
+      const auto& calib_json = camera_json["calib"];
 
-      const auto& extrinsics_data = calib_data["extrinsics"];
-      Eigen::Matrix<double, 3, 4> pose;
+      const auto& extrinsics_json = calib_json["extrinsics"];
+      Mat3x4 pose;
       for (int i = 0; i < 3; i++) {
-        const auto& row = extrinsics_data[i];
+        const auto& row = extrinsics_json[i];
         for (int j = 0; j < 4; j++) {
           pose(i, j) = row[j].get<double>();
         }
       }
-      bundle.extrinsics.world2cam_rot = Eigen::Quaterniond(pose.leftCols<3>());
-      bundle.extrinsics.world_in_cam_pos = pose.col(3);
+      calib.extrinsics.world2cam_rot = Quat(pose.leftCols<3>());
+      calib.extrinsics.world_in_cam_pos = pose.col(3);
 
-      const auto& intrinsics_data = calib_data["intrinsics"];
-      Eigen::Matrix<double, 3, 3> K;
+      const auto& intrinsics_json = calib_json["intrinsics"];
+      Mat3 K;
       for (int i = 0; i < 3; i++) {
-        const auto& row = intrinsics_data[i];
+        const auto& row = intrinsics_json[i];
         for (int j = 0; j < 3; j++) {
           K(i, j) = row[j].get<double>();
         }
       }
-      bundle.intrinsics.principal_point = K.topRightCorner<2, 1>();
-      bundle.intrinsics.f = K(0, 0);
+      calib.intrinsics.principal_point = K.topRightCorner<2, 1>();
+      calib.intrinsics.f = K(0, 0);
 
-      const auto& size_data = calib_data["size"];
-      bundle.size << size_data[0].get<int>(), size_data[1].get<int>();
+      const auto& size_json = calib_json["size"];
+      calib.size << size_json[0].get<int>(), size_json[1].get<int>();
 
-      for (auto& [obs_id_str, obs_data] : camera_data["observations"].items()) {
+      for (auto& [obs_id_str, obs_json] : camera_json["observations"].items()) {
         size_t obs_id = std::stoul(obs_id_str);
 
-        bundle.observations[obs_id] << obs_data[0].get<double>(), obs_data[1].get<double>();
+        bundle.observations[obs_id] << obs_json[0].get<double>(), obs_json[1].get<double>();
       }
 
       dataset.cameras.emplace(cam_id, std::move(bundle));
     }
 
-    for (auto& [pt_id_str, pt_data] : json_data["worldPoints"].items()) {
+    for (auto& [pt_id_str, pt_json] : root_json["worldPoints"].items()) {
       size_t pt_id = std::stoul(pt_id_str);
 
-      Eigen::Vector3d world_point;
-      world_point(0) = pt_data[0];
-      world_point(1) = pt_data[1];
-      world_point(2) = pt_data[2];
+      Vec3 world_point;
+      world_point(0) = pt_json[0];
+      world_point(1) = pt_json[1];
+      world_point(2) = pt_json[2];
       dataset.world_points[pt_id] = world_point;
     }
   } catch (const std::exception& e) {

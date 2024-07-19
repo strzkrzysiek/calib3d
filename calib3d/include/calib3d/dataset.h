@@ -9,15 +9,13 @@
 namespace calib3d {
 
 struct CameraBundle {
-  CameraIntrinsics intrinsics;
-  CameraExtrinsics extrinsics;
-  CameraSize size;
+  CameraCalib calib;
   Observations observations;
 };
 
 struct Dataset {
-  std::map<size_t, CameraBundle> cameras;
-  std::map<size_t, Eigen::Vector3d> world_points;
+  std::map<CamId, CameraBundle> cameras;
+  std::map<PointId, Eigen::Vector3d> world_points;
 };
 
 bool loadJsonDataset(const std::string& filename, Dataset& dataset);
