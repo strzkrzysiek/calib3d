@@ -1,4 +1,4 @@
-#include <calib3d/dataset.h>
+#include <calib3d/Dataset.h>
 
 #include <exception>
 #include <fstream>
@@ -7,7 +7,10 @@
 
 namespace calib3d {
 
-bool loadJsonDataset(const std::string& filename, Dataset& dataset) {
+bool Dataset::loadFromJson(const std::string& filename) {
+  cameras.clear();
+  world_points.clear();
+
   std::ifstream file(filename);
   if (!file.is_open()) {
     LOG(ERROR) << "Failed to open file: " << filename;
@@ -58,7 +61,7 @@ bool loadJsonDataset(const std::string& filename, Dataset& dataset) {
         bundle.observations[obs_id] << obs_json[0].get<double>(), obs_json[1].get<double>();
       }
 
-      dataset.cameras.emplace(cam_id, std::move(bundle));
+      cameras.emplace(cam_id, std::move(bundle));
     }
 
     for (auto& [pt_id_str, pt_json] : root_json["worldPoints"].items()) {
@@ -68,7 +71,7 @@ bool loadJsonDataset(const std::string& filename, Dataset& dataset) {
       world_point(0) = pt_json[0];
       world_point(1) = pt_json[1];
       world_point(2) = pt_json[2];
-      dataset.world_points[pt_id] = world_point;
+      world_points[pt_id] = world_point;
     }
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

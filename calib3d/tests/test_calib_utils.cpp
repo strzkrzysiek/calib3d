@@ -4,7 +4,7 @@
 #include <Eigen/SVD>
 #include <gtest/gtest.h>
 
-#include <calib3d/dataset.h>
+#include <calib3d/Dataset.h>
 
 using namespace calib3d;
 
@@ -22,7 +22,7 @@ protected:
   Mat3X world_pts;
 
   void SetUp() override {
-    ASSERT_TRUE(loadJsonDataset(DATASET_FILE_PATH, dataset));
+    ASSERT_TRUE(dataset.loadFromJson(DATASET_FILE_PATH));
     ASSERT_FALSE(dataset.cameras.empty());
     ASSERT_FALSE(dataset.world_points.empty());
 

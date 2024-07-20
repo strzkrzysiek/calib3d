@@ -4,16 +4,14 @@ add_library(calib3d
     include/calib3d/BAProblem.h
     include/calib3d/calib_utils.h
     include/calib3d/calib_utils.hpp
-    include/calib3d/calib3d.h
-    include/calib3d/dataset.h
-    include/calib3d/ransac.h
-    include/calib3d/ransac.hpp
+    include/calib3d/Dataset.h
+    include/calib3d/RansacEngine.h
+    include/calib3d/RansacEngine.hpp
     include/calib3d/ThreeViewReconstruction.h
     include/calib3d/ThreeViewReconstructionWithBA.h
     include/calib3d/types.h
     src/BAProblem.cpp
-    src/calib3d.cpp
-    src/dataset.cpp
+    src/Dataset.cpp
     src/ThreeViewReconstruction.cpp
     src/ThreeViewReconstructionWithBA.cpp
 )

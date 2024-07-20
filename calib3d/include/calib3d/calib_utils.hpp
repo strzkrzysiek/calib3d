@@ -4,7 +4,7 @@
 #include <cmath>
 #include <glog/logging.h>
 
-#include <calib3d/ransac.h>
+#include <calib3d/RansacEngine.h>
 
 namespace calib3d {
 

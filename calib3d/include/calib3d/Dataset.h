@@ -16,8 +16,8 @@ struct CameraBundle {
 struct Dataset {
   std::map<CamId, CameraBundle> cameras;
   std::map<PointId, Eigen::Vector3d> world_points;
-};
 
-bool loadJsonDataset(const std::string& filename, Dataset& dataset);
+  bool loadFromJson(const std::string& filename);
+};
 
 } // namespace calib3d
