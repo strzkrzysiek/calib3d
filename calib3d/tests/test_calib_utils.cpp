@@ -29,8 +29,8 @@ protected:
     K0 = dataset.cameras[0].calib.intrinsics.K();
     K1 = dataset.cameras[1].calib.intrinsics.K();
 
-    world2cam0 = dataset.cameras[0].calib.extrinsics.matrix();
-    world2cam1 = dataset.cameras[1].calib.extrinsics.matrix();
+    world2cam0 = dataset.cameras[0].calib.world2cam.matrix();
+    world2cam1 = dataset.cameras[1].calib.world2cam.matrix();
 
     P0 = K0 * world2cam0.topRows<3>();
     P1 = K1 * world2cam1.topRows<3>();

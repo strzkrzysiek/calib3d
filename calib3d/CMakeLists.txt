@@ -1,11 +1,7 @@
-find_package(Boost REQUIRED COMPONENTS math_c99)
-find_package(Ceres REQUIRED)
-find_package(Eigen3 REQUIRED NO_MODULE)
-find_package(glog REQUIRED)
-find_package(GTest REQUIRED)
-find_package(nlohmann_json REQUIRED)
+add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 add_library(calib3d
+    include/calib3d/BAProblem.h
     include/calib3d/calib_utils.h
     include/calib3d/calib_utils.hpp
     include/calib3d/calib3d.h
@@ -13,22 +9,26 @@ add_library(calib3d
     include/calib3d/ransac.h
     include/calib3d/ransac.hpp
     include/calib3d/ThreeViewReconstruction.h
+    include/calib3d/ThreeViewReconstructionWithBA.h
     include/calib3d/types.h
+    src/BAProblem.cpp
     src/calib3d.cpp
     src/dataset.cpp
     src/ThreeViewReconstruction.cpp
+    src/ThreeViewReconstructionWithBA.cpp
 )
+
+set_source_files_properties(src/BAProblem.cpp PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
 
 target_include_directories(calib3d
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
-    SYSTEM
-        PUBLIC Eigen3::Eigen
 )
 
 target_link_libraries(calib3d
     PUBLIC Eigen3::Eigen
+    PUBLIC sophus
     PRIVATE Ceres::ceres
     PRIVATE glog::glog
     PRIVATE nlohmann_json::nlohmann_json

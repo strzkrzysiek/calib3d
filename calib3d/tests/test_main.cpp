@@ -8,6 +8,8 @@ int main(int argc, char** argv) {
   FLAGS_logtostderr = true;
   FLAGS_minloglevel = 0;
 
+  FLAGS_v = 2;
+
   int result = RUN_ALL_TESTS();
 
   google::ShutdownGoogleLogging();

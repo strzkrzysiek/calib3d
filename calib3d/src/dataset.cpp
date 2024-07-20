@@ -34,8 +34,9 @@ bool loadJsonDataset(const std::string& filename, Dataset& dataset) {
           pose(i, j) = row[j].get<double>();
         }
       }
-      calib.extrinsics.world2cam_rot = Quat(pose.leftCols<3>());
-      calib.extrinsics.world_in_cam_pos = pose.col(3);
+
+      calib.world2cam.setRotationMatrix(pose.leftCols<3>());
+      calib.world2cam.translation() = pose.col(3);
 
       const auto& intrinsics_json = calib_json["intrinsics"];
       Mat3 K;
@@ -46,7 +47,7 @@ bool loadJsonDataset(const std::string& filename, Dataset& dataset) {
         }
       }
       calib.intrinsics.principal_point = K.topRightCorner<2, 1>();
-      calib.intrinsics.f = K(0, 0);
+      calib.intrinsics.focal_length = K(0, 0);
 
       const auto& size_json = calib_json["size"];
       calib.size << size_json[0].get<int>(), size_json[1].get<int>();

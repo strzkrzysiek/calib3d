@@ -9,26 +9,22 @@
 
 namespace calib3d {
 
-struct ThreeViewReconstructionParams {
-  double observation_noise = 3.0;
-};
-
 class ThreeViewReconstruction {
 public:
-  explicit ThreeViewReconstruction(const ThreeViewReconstructionParams& params);
+  explicit ThreeViewReconstruction(double observation_noise);
 
   [[nodiscard]] const std::map<CamId, CameraCalib>& getCameras() const;
   [[nodiscard]] const std::map<PointId, PointData>& getPoints() const;
 
-  void reconstruct(CamId cam0_id,
-                   const CameraSize& cam0_size,
-                   const Observations& cam0_obs,
-                   CamId cam1_id,
-                   const CameraSize& cam1_size,
-                   const Observations& cam1_obs,
-                   CamId cam2_id,
-                   const CameraSize& cam2_size,
-                   const Observations& cam2_obs);
+  virtual void reconstruct(CamId cam0_id,
+                           const CameraSize& cam0_size,
+                           const Observations& cam0_obs,
+                           CamId cam1_id,
+                           const CameraSize& cam1_size,
+                           const Observations& cam1_obs,
+                           CamId cam2_id,
+                           const CameraSize& cam2_size,
+                           const Observations& cam2_obs);
 
 protected:
   void insertCameraData(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs);
@@ -60,9 +56,7 @@ private:
 protected:
   std::map<CamId, CameraCalib> cameras_;
   std::map<PointId, PointData> points_;
-
-private:
-  const ThreeViewReconstructionParams& params_;
+  const double observation_noise_;
 };
 
 } // namespace calib3d

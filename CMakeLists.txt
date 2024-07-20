@@ -5,8 +5,13 @@ project(bolt6-ba LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_compile_options(-Wall -Wextra -pedantic -Werror)
+find_package(Boost REQUIRED COMPONENTS math_c99)
+find_package(Eigen3 3.4.0 REQUIRED NO_MODULE)
+find_package(glog REQUIRED)
+find_package(GTest REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
+add_subdirectory(third-party)
 add_subdirectory(calib3d)
 
 if(NOT CLANG_FORMAT_BIN)
@@ -17,9 +22,9 @@ if(NOT CLANG_FORMAT_BIN)
 endif()
 
 file(GLOB_RECURSE ALL_CXX_SOURCE_FILES
-    ${CMAKE_SOURCE_DIR}/*.cpp
-    ${CMAKE_SOURCE_DIR}/*.h
-    ${CMAKE_SOURCE_DIR}/*.hpp
+    ${CMAKE_SOURCE_DIR}/calib3d/*.cpp
+    ${CMAKE_SOURCE_DIR}/calib3d/*.h
+    ${CMAKE_SOURCE_DIR}/calib3d/*.hpp
 )
 
 add_custom_target(

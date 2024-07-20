@@ -11,12 +11,15 @@
 
 namespace calib3d {
 
-ThreeViewReconstruction::ThreeViewReconstruction(const calib3d::ThreeViewReconstructionParams& params)
-    : params_(params) {}
+ThreeViewReconstruction::ThreeViewReconstruction(double observation_noise) : observation_noise_(observation_noise) {}
 
-const std::map<CamId, CameraCalib>& ThreeViewReconstruction::getCameras() const { return cameras_; }
+const std::map<CamId, CameraCalib>& ThreeViewReconstruction::getCameras() const {
+  return cameras_;
+}
 
-const std::map<PointId, PointData>& ThreeViewReconstruction::getPoints() const { return points_; }
+const std::map<PointId, PointData>& ThreeViewReconstruction::getPoints() const {
+  return points_;
+}
 
 void ThreeViewReconstruction::reconstruct(CamId cam0_id,
                                           const CameraSize& cam0_size,
@@ -99,7 +102,7 @@ std::pair<ThreeOf<Mat3x4>, Mat3X> ThreeViewReconstruction::performProjectiveReco
   boost::math::chi_squared dist(2);
   const double percentile_95 = boost::math::quantile(dist, 0.95);
 
-  const double ransac_thr = percentile_95 * params_.observation_noise;
+  const double ransac_thr = percentile_95 * observation_noise_;
   const double ransac_confidence = 0.99;
   const size_t ransac_max_iters = 1000;
 
@@ -307,10 +310,10 @@ void ThreeViewReconstruction::recoverCameraCalibrations(const ThreeOf<Mat3x4>& P
     LOG(INFO) << "Rmat:\n" << Rmat;
     LOG(INFO) << "tvec: " << tvec.transpose();
 
-    camera_calib.intrinsics.f = K[i](0, 0);
+    camera_calib.intrinsics.focal_length = K[i](0, 0);
     camera_calib.intrinsics.principal_point = camera_calib.size.cast<double>() / 2.;
-    camera_calib.extrinsics.world2cam_rot = Rmat;
-    camera_calib.extrinsics.world_in_cam_pos = tvec;
+    camera_calib.world2cam.setRotationMatrix(Rmat);
+    camera_calib.world2cam.translation() = tvec;
 
     ++cameras_it;
   }

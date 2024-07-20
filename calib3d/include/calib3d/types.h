@@ -4,59 +4,105 @@
 #include <Eigen/Geometry>
 #include <map>
 #include <optional>
+#include <sophus/se3.hpp>
 
 namespace calib3d {
 
-using Vec2 = Eigen::Vector2d;
-using Vec3 = Eigen::Vector3d;
-using Vec4 = Eigen::Vector4d;
-using VecX = Eigen::VectorXd;
+template <class T>
+using Vec2T = Eigen::Vector2<T>;
+using Vec2 = Vec2T<double>;
 
-using Mat3 = Eigen::Matrix3d;
-using Mat4 = Eigen::Matrix4d;
-using Mat3x4 = Eigen::Matrix<double, 3, 4>;
-using Mat2X = Eigen::Matrix2Xd;
-using Mat3X = Eigen::Matrix3Xd;
-using Mat4X = Eigen::Matrix4Xd;
+template <class T>
+using Vec3T = Eigen::Vector3<T>;
+using Vec3 = Vec3T<double>;
 
-using Quat = Eigen::Quaterniond;
+template <class T>
+using Vec4T = Eigen::Vector4<T>;
+using Vec4 = Vec4T<double>;
 
-struct CameraIntrinsics {
-  Vec2 principal_point;
-  double f;
+template <class T>
+using VecXT = Eigen::VectorX<T>;
+using VecX = VecXT<double>;
 
-  [[nodiscard]] Mat3 K() const {
-    return (Mat3() << f, 0., principal_point[0], 0., f, principal_point[1], 0., 0., 1.).finished();
-  }
-};
+template <class T>
+using Mat3T = Eigen::Matrix3<T>;
+using Mat3 = Mat3T<double>;
 
-struct CameraExtrinsics {
-  Quat world2cam_rot;
-  Vec3 world_in_cam_pos;
+template <class T>
+using Mat4T = Eigen::Matrix4<T>;
+using Mat4 = Mat4T<double>;
 
-  [[nodiscard]] Mat4 matrix() const {
-    Mat4 world2cam = Mat4::Identity();
-    world2cam.topLeftCorner<3, 3>() = world2cam_rot.matrix();
-    world2cam.topRightCorner<3, 1>() = world_in_cam_pos;
+template <class T>
+using Mat3x4T = Eigen::Matrix<T, 3, 4>;
+using Mat3x4 = Mat3x4T<double>;
 
-    return world2cam;
-  }
+template <class T>
+using Mat2XT = Eigen::Matrix2X<T>;
+using Mat2X = Mat2XT<double>;
 
-  [[nodiscard]] Vec3 cam_in_world_pos() const { return -(world2cam_rot.conjugate() * world_in_cam_pos); }
-};
+template <class T>
+using Mat3XT = Eigen::Matrix3X<T>;
+using Mat3X = Mat3XT<double>;
+
+template <class T>
+using Mat4XT = Eigen::Matrix4X<T>;
+using Mat4X = Mat4XT<double>;
+
+template <class T>
+using SE3T = Sophus::SE3<T>;
+using SE3 = SE3T<double>;
 
 using CamId = size_t;
 using PointId = size_t;
-using CameraSize = Eigen::Vector2i;
 
 using Observations = std::map<CamId, Vec2>;
+using CameraSize = Eigen::Vector2i;
+
+template <class T>
+using CameraExtrinsicsT = SE3T<T>;
+
+using CameraExtrinsics = CameraExtrinsicsT<double>;
+
+struct CameraIntrinsics {
+  Vec2 principal_point;
+  double focal_length;
+
+  [[nodiscard]] Mat3 K() const {
+    // clang-format off
+    return (Mat3() <<
+        focal_length, 0.,           principal_point[0],
+        0.,           focal_length, principal_point[1],
+        0.,           0.,           1.).finished();
+    // clang-format on
+  }
+};
+
+// template <class T>
+// struct CameraIntrinsicsT : public Eigen::Vector3<T> {
+//  [[nodiscard]] auto principal_point() { return this->template head<2>(); }
+//  [[nodiscard]] auto principal_point() const { return this->template head<2>(); }
+//
+//  [[nodiscard]] auto& f() { return (*this)[2]; }
+//  [[nodiscard]] const auto& f() const { return (*this)[2]; }
+//
+//  [[nodiscard]] Mat3T<T> K() const {
+//    // clang-format off
+//    return (Eigen::Matrix3<T>() <<
+//        f(), 0.,  principal_point()[0],
+//        0.,  f(), principal_point()[1],
+//        0.,  0.,  1.).finished();
+//    // clang-format on
+//  }
+//};
+//
+// using CameraIntrinsics = CameraIntrinsicsT<double>;
 
 struct CameraCalib {
   CameraIntrinsics intrinsics;
-  CameraExtrinsics extrinsics;
+  CameraExtrinsics world2cam;
   CameraSize size;
 
-  [[nodiscard]] Mat3x4 P() const { return intrinsics.K() * extrinsics.matrix().topRows<3>(); }
+  [[nodiscard]] Mat3x4 P() const { return intrinsics.K() * world2cam.matrix3x4(); }
 };
 
 template <class T>
