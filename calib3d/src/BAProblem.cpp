@@ -110,7 +110,7 @@ struct BAProblem::Impl {
     ceres::Solver::Options options;
     options.minimizer_type = ceres::TRUST_REGION;
     options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
-    options.linear_solver_type = ceres::DENSE_QR;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
     options.logging_type = ceres::PER_MINIMIZER_ITERATION;
 
     return options;

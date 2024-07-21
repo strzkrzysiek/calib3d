@@ -5,6 +5,7 @@ add_library(calib3d
     include/calib3d/calib_utils.h
     include/calib3d/calib_utils.hpp
     include/calib3d/Dataset.h
+    include/calib3d/NViewReconstruction.h
     include/calib3d/RansacEngine.h
     include/calib3d/RansacEngine.hpp
     include/calib3d/ThreeViewReconstruction.h
@@ -12,6 +13,7 @@ add_library(calib3d
     include/calib3d/types.h
     src/BAProblem.cpp
     src/Dataset.cpp
+    src/NViewReconstruction.cpp
     src/ThreeViewReconstruction.cpp
     src/ThreeViewReconstructionWithBA.cpp
 )
@@ -37,7 +39,7 @@ enable_testing()
 add_executable(test_calib3d
     tests/test_main.cpp
     tests/test_calib_utils.cpp
-    tests/test_three_view_reconstruction.cpp
+    tests/test_reconstruction.cpp
 )
 
 set(DATASET_FILE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../data/accurate-calibrations-and-accurate-world-points.json")

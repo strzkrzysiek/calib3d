@@ -77,26 +77,6 @@ struct CameraIntrinsics {
   }
 };
 
-// template <class T>
-// struct CameraIntrinsicsT : public Eigen::Vector3<T> {
-//  [[nodiscard]] auto principal_point() { return this->template head<2>(); }
-//  [[nodiscard]] auto principal_point() const { return this->template head<2>(); }
-//
-//  [[nodiscard]] auto& f() { return (*this)[2]; }
-//  [[nodiscard]] const auto& f() const { return (*this)[2]; }
-//
-//  [[nodiscard]] Mat3T<T> K() const {
-//    // clang-format off
-//    return (Eigen::Matrix3<T>() <<
-//        f(), 0.,  principal_point()[0],
-//        0.,  f(), principal_point()[1],
-//        0.,  0.,  1.).finished();
-//    // clang-format on
-//  }
-//};
-//
-// using CameraIntrinsics = CameraIntrinsicsT<double>;
-
 struct CameraCalib {
   CameraIntrinsics intrinsics;
   CameraExtrinsics world2cam;

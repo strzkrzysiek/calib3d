@@ -29,7 +29,6 @@ public:
 protected:
   void insertCameraData(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs);
 
-private:
   void performThreeViewReconstruction();
 
   [[nodiscard]] std::pair<std::vector<PointId>, ThreeOf<Mat2X>> prepareCommonObservations() const;
@@ -41,6 +40,7 @@ private:
   static ThreeOf<Mat3> performMetricRectification(ThreeOf<Mat3x4>& P, Mat3X& world_pts);
   [[nodiscard]] static Mat4 findAbsoluteDualQuadratic(const ThreeOf<Mat3x4>& P);
   [[nodiscard]] static ThreeOf<Mat3> findCameraMatrices(const Mat4& ADQ, const ThreeOf<Mat3x4>& P);
+  [[nodiscard]] static Mat3 findCameraMatrix(const Mat4& ADQ, const Mat3x4& P);
   [[nodiscard]] static Mat4 findRectifyingHomography(const Mat4& ADQ,
                                                      const Mat3& K0,
                                                      const ThreeOf<Mat3x4>& P,
@@ -48,6 +48,7 @@ private:
   static void transformReconstruction(const Mat4& H, ThreeOf<Mat3x4>& P, Mat3X& world_pts);
 
   void recoverCameraCalibrations(const ThreeOf<Mat3x4>& P, const ThreeOf<Mat3>& K);
+  static void recoverCameraCalibration(const Mat3x4& P, const Mat3& K, CameraCalib& calib);
 
   void writeBackWorldPoints(const std::vector<PointId>& common_pt_ids, const Mat3X& world_pts);
 
@@ -57,6 +58,10 @@ protected:
   std::map<CamId, CameraCalib> cameras_;
   std::map<PointId, PointData> points_;
   const double observation_noise_;
+  const double percentile_95_;
+  const double ransac_thr_;
+  const double ransac_confidence_;
+  const size_t ransac_max_iters_;
 };
 
 } // namespace calib3d
