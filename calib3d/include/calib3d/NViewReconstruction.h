@@ -8,6 +8,7 @@ class NViewReconstruction : protected ThreeViewReconstructionWithBA {
 public:
   using ThreeViewReconstructionWithBA::getCameras;
   using ThreeViewReconstructionWithBA::getPoints;
+  using ThreeViewReconstructionWithBA::optimizeWithPrincipalPoint;
 
   explicit NViewReconstruction(double observation_noise);
 
@@ -25,7 +26,8 @@ public:
 
 protected:
   void initializeNewCamera(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs);
-  std::pair<Mat3X, Mat2X> prepare3D2DCorrespondences(const CameraSize& cam_size, const Observations& cam_obs);
+  std::tuple<Mat3X, Mat2X, std::vector<PointId>> prepare3D2DCorrespondences(const CameraSize& cam_size,
+                                                                            const Observations& cam_obs);
 
   void optimizeNewCamera(CamId cam_id, const Observations& cam_obs);
 

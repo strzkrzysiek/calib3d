@@ -18,6 +18,9 @@ public:
 
   void optimize();
 
+  void setPrincipalPointVariable();
+  void setPrincipalPointConstant();
+
 private:
   struct Impl;
 

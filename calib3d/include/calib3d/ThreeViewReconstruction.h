@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <map>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -61,6 +62,16 @@ protected:
 
   void writeBackWorldPoints(const std::vector<PointId>& common_pt_ids, const Mat3X& world_pts);
 
+  [[nodiscard]] std::set<PointId> identifyOutliers(const ThreeOf<CamId>& cam_ids,
+                                                   const Mat3X& world_pts,
+                                                   const ThreeOf<Mat2X>& image_pts,
+                                                   const std::vector<PointId>& pt_ids) const;
+  [[nodiscard]] std::set<PointId> identifyOutliers(CamId cam_id,
+                                                   const Mat3X& world_pts,
+                                                   const Mat2X& image_pts,
+                                                   const std::vector<PointId>& pt_ids) const;
+
+  void retriangulateOutliers(const std::set<PointId>& outlier_ids);
   void triangulateRemainingPoints();
 
 protected:

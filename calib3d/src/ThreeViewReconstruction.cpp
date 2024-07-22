@@ -6,6 +6,7 @@
 #include <boost/math/distributions/chi_squared.hpp>
 #include <cmath>
 #include <glog/logging.h>
+#include <ranges>
 
 #include <calib3d/CameraCalibRefinementProblem.h>
 #include <calib3d/calib_utils.h>
@@ -60,10 +61,13 @@ void ThreeViewReconstruction::performThreeViewReconstruction(const ThreeOf<CamId
   auto K = performMetricRectification(P, world_pts);
   recoverCameraCalibrations(cam_ids, P, K);
   refineCameraCalibrations(cam_ids, P, world_pts, image_pts);
-
   fixRotationAndScale(cam_ids, world_pts);
 
   writeBackWorldPoints(common_pt_ids, world_pts);
+
+  auto outlier_ids = identifyOutliers(cam_ids, world_pts, image_pts, common_pt_ids);
+  retriangulateOutliers(outlier_ids);
+
   triangulateRemainingPoints();
 }
 
@@ -219,7 +223,7 @@ ThreeOf<Mat3> ThreeViewReconstruction::findCameraMatrices(const Mat4& ADQ, const
   return {findCameraMatrix(ADQ, P[0]), findCameraMatrix(ADQ, P[1]), findCameraMatrix(ADQ, P[2])};
 }
 
-Mat3 ThreeViewReconstruction::findCameraMatrix(const calib3d::Mat4& ADQ, const calib3d::Mat3x4& P) {
+Mat3 ThreeViewReconstruction::findCameraMatrix(const Mat4& ADQ, const Mat3x4& P) {
   Mat3 DIAC = P * ADQ * P.transpose();
   DIAC /= DIAC(2, 2);
 
@@ -322,7 +326,7 @@ void ThreeViewReconstruction::refineCameraCalibration(const Mat3x4& P,
   problem.optimize();
 }
 
-void ThreeViewReconstruction::fixRotationAndScale(const ThreeOf<CamId>& cam_ids, calib3d::Mat3X& world_pts) {
+void ThreeViewReconstruction::fixRotationAndScale(const ThreeOf<CamId>& cam_ids, Mat3X& world_pts) {
   const auto& init_cam = cameras_.at(cam_ids[0]);
   SE3 world2init_cam = init_cam.world2cam;
   SE3 init_cam2world = world2init_cam.inverse();
@@ -354,10 +358,76 @@ void ThreeViewReconstruction::writeBackWorldPoints(const std::vector<PointId>& c
   }
 }
 
-void ThreeViewReconstruction::triangulateRemainingPoints() {
-  std::map<CamId, Mat3x4> final_P;
+std::set<PointId> ThreeViewReconstruction::identifyOutliers(const ThreeOf<CamId>& cam_ids,
+                                                            const Mat3X& world_pts,
+                                                            const ThreeOf<Mat2X>& image_pts,
+                                                            const std::vector<PointId>& pt_ids) const {
+  ThreeOf<std::set<PointId>> outlier_ids_per_camera = {identifyOutliers(cam_ids[0], world_pts, image_pts[0], pt_ids),
+                                                       identifyOutliers(cam_ids[1], world_pts, image_pts[1], pt_ids),
+                                                       identifyOutliers(cam_ids[2], world_pts, image_pts[2], pt_ids)};
+
+  auto outlier_view = std::views::join(outlier_ids_per_camera);
+  std::set<PointId> outlier_ids(outlier_view.begin(), outlier_view.end());
+
+  return outlier_ids;
+}
+
+std::set<PointId> ThreeViewReconstruction::identifyOutliers(CamId cam_id,
+                                                            const Mat3X& world_pts,
+                                                            const Mat2X& image_pts,
+                                                            const std::vector<PointId>& pt_ids) const {
+  std::set<PointId> outlier_ids;
+  const auto& calib = cameras_.at(cam_id);
+  Mat3x4 P = calib.intrinsics.K().diagonal().asDiagonal() * calib.world2cam.matrix3x4();
+
+  VecX err = ((P * world_pts.colwise().homogeneous()).colwise().hnormalized() - image_pts).colwise().norm();
+  for (int i = 0; i < err.size(); i++) {
+    if (err(i) > ransac_thr_) {
+      outlier_ids.insert(pt_ids[i]);
+    }
+  }
+
+  LOG(INFO) << "Identified " << outlier_ids.size() << " outliers for camera " << cam_id;
+
+  return outlier_ids;
+}
+
+void ThreeViewReconstruction::retriangulateOutliers(const std::set<PointId>& outlier_ids) {
+  LOG(INFO) << "Retriangulating " << outlier_ids.size() << " outliers";
+
+  if (outlier_ids.empty()) {
+    return;
+  }
+
+  std::map<CamId, size_t> cam_id_to_idx;
+  Eigen::Matrix<double, 12, Eigen::Dynamic> P_flattened(12, cameras_.size());
   for (const auto& [cam_id, cam_calib] : cameras_) {
-    final_P[cam_id] = cam_calib.P();
+    size_t idx = cam_id_to_idx.size();
+    P_flattened.col(idx) = cam_calib.P().reshaped();
+    cam_id_to_idx[cam_id] = idx;
+  }
+
+  for (PointId outlier_id : outlier_ids) {
+    auto& pt_data = points_.at(outlier_id);
+    CHECK_GE(pt_data.image_pts.size(), 3);
+
+    Mat2X image_pts(2, pt_data.image_pts.size());
+    std::vector<size_t> P_indices;
+    for (const auto& [cam_id, image_pt] : pt_data.image_pts) {
+      image_pts.col(P_indices.size()) = image_pt;
+      P_indices.push_back(cam_id_to_idx.at(cam_id));
+    }
+
+    pt_data.world_pt =
+        triangulatePointRansac(image_pts, P_flattened(Eigen::all, P_indices), ransac_thr_, ransac_confidence_, 50);
+    LOG(INFO) << "New PT " << outlier_id << " pos: " << pt_data.world_pt.value().transpose();
+  }
+}
+
+void ThreeViewReconstruction::triangulateRemainingPoints() {
+  std::map<CamId, Mat3x4> P;
+  for (const auto& [cam_id, cam_calib] : cameras_) {
+    P[cam_id] = cam_calib.P();
   }
 
   for (auto& [pt_id, pt_data] : points_) {
@@ -365,11 +435,13 @@ void ThreeViewReconstruction::triangulateRemainingPoints() {
       continue;
     }
 
+    CHECK_EQ(pt_data.image_pts.size(), 2);
+
     CamId cam1_id = pt_data.image_pts.begin()->first;
     CamId cam2_id = std::next(pt_data.image_pts.begin())->first;
 
-    pt_data.world_pt = triangulatePoints(
-        pt_data.image_pts.at(cam1_id), pt_data.image_pts.at(cam2_id), final_P.at(cam1_id), final_P.at(cam2_id));
+    pt_data.world_pt =
+        triangulatePoints(pt_data.image_pts.at(cam1_id), pt_data.image_pts.at(cam2_id), P.at(cam1_id), P.at(cam2_id));
   }
 }
 

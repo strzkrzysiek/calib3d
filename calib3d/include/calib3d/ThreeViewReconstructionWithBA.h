@@ -22,6 +22,8 @@ public:
                    const CameraSize& cam2_size,
                    const Observations& cam2_obs) override;
 
+  void optimizeWithPrincipalPoint();
+
 protected:
   BAProblem ba_problem_;
 };

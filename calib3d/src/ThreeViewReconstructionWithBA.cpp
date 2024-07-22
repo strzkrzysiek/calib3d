@@ -30,12 +30,18 @@ void ThreeViewReconstructionWithBA::reconstruct(CamId cam0_id,
 
     auto& world_pt = pt_data.world_pt.value();
     for (auto& [cam_id, image_pt] : pt_data.image_pts) {
-      LOG(INFO) << "Adding observation (PT: " << pt_id << "; CAM: " << cam_id << ")";
+      // LOG(INFO) << "Adding observation (PT: " << pt_id << "; CAM: " << cam_id << ")";
       ba_problem_.addObservation(cameras_.at(cam_id), world_pt, image_pt);
     }
   }
 
   ba_problem_.optimize();
+}
+
+void ThreeViewReconstructionWithBA::optimizeWithPrincipalPoint() {
+  ba_problem_.setPrincipalPointVariable();
+  ba_problem_.optimize();
+  ba_problem_.setPrincipalPointConstant();
 }
 
 } // namespace calib3d

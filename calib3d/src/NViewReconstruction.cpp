@@ -28,7 +28,7 @@ void NViewReconstruction::addNewCamera(CamId cam_id, const CameraSize& cam_size,
 }
 
 void NViewReconstruction::initializeNewCamera(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs) {
-  const auto [world_pts, image_pts] = prepare3D2DCorrespondences(cam_size, cam_obs);
+  const auto [world_pts, image_pts, pt_ids] = prepare3D2DCorrespondences(cam_size, cam_obs);
   Mat3x4 P = findProjectionMatrixRansac(world_pts, image_pts, ransac_thr_, ransac_confidence_, ransac_max_iters_);
 
   {
@@ -66,31 +66,35 @@ void NViewReconstruction::initializeNewCamera(CamId cam_id, const CameraSize& ca
     Vec2 residual_bias = residual.rowwise().mean();
     LOG(INFO) << "Projection BIAS (after refining): " << residual_bias.transpose();
   }
+
+  auto outlier_ids = identifyOutliers(cam_id, world_pts, image_pts, pt_ids);
+  retriangulateOutliers(outlier_ids);
 }
 
-std::pair<Mat3X, Mat2X> NViewReconstruction::prepare3D2DCorrespondences(const CameraSize& cam_size,
-                                                                        const Observations& cam_obs) {
+std::tuple<Mat3X, Mat2X, std::vector<PointId>> NViewReconstruction::prepare3D2DCorrespondences(
+    const CameraSize& cam_size, const Observations& cam_obs) {
   Mat3X world_pts(3, cam_obs.size());
   Mat2X image_pts(2, cam_obs.size());
+  std::vector<PointId> pt_ids;
+  pt_ids.reserve(cam_obs.size());
 
   Vec2 principal_pt_offset = cam_size.cast<double>() / 2.;
 
-  int n_points = 0;
   for (const auto& [pt_id, image_pt] : cam_obs) {
     const auto& pt_data = points_.at(pt_id);
     if (!pt_data.world_pt) {
       continue;
     }
 
-    world_pts.col(n_points) = pt_data.world_pt.value();
-    image_pts.col(n_points) = image_pt - principal_pt_offset;
-    n_points++;
+    world_pts.col(pt_ids.size()) = pt_data.world_pt.value();
+    image_pts.col(pt_ids.size()) = image_pt - principal_pt_offset;
+    pt_ids.push_back(pt_id);
   }
 
-  world_pts.conservativeResize(Eigen::NoChange, n_points);
-  image_pts.conservativeResize(Eigen::NoChange, n_points);
+  world_pts.conservativeResize(Eigen::NoChange, pt_ids.size());
+  image_pts.conservativeResize(Eigen::NoChange, pt_ids.size());
 
-  return {world_pts, image_pts};
+  return {world_pts, image_pts, pt_ids};
 }
 
 void NViewReconstruction::optimizeNewCamera(CamId cam_id, const Observations& cam_obs) {

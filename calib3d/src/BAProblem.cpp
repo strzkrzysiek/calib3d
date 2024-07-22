@@ -71,6 +71,8 @@ struct BAProblem::Impl {
       problem_.SetManifold(calib.world2cam.data(), &se3_manifold_);
       break;
     }
+
+    cameras_.push_back(&calib);
   }
 
   void addObservation(CameraCalib& calib, Vec3& world_pt, const Vec2& image_pt) {
@@ -82,7 +84,7 @@ struct BAProblem::Impl {
                               &calib.intrinsics.focal_length,
                               world_pt.data());
 
-    {
+    if constexpr (false) {
       Vec2 residual;
       std::vector<const double*> parameters = {calib.world2cam.data(),
                                                calib.intrinsics.principal_point.data(),
@@ -99,6 +101,18 @@ struct BAProblem::Impl {
     ceres::Solve(solver_options_, &problem_, &summary);
 
     LOG(INFO) << "Solver report:\n" << summary.FullReport();
+  }
+
+  void setPrincipalPointVariable() {
+    for (CameraCalib* calib : cameras_) {
+      problem_.SetParameterBlockVariable(calib->intrinsics.principal_point.data());
+    }
+  }
+
+  void setPrincipalPointConstant() {
+    for (CameraCalib* calib : cameras_) {
+      problem_.SetParameterBlockConstant(calib->intrinsics.principal_point.data());
+    }
   }
 
   [[nodiscard]] static ceres::Problem::Options createProblemOptions() {
@@ -126,6 +140,8 @@ struct BAProblem::Impl {
   SE3Manifold se3_manifold_;
   SE3WithFixedNormManifold se3_with_fixed_norm_manifold_;
   ceres::CauchyLoss cauchy_loss_;
+
+  std::vector<CameraCalib*> cameras_;
 };
 
 BAProblem::BAProblem(double observation_noise) : impl_(new Impl(observation_noise)) {}
@@ -142,6 +158,14 @@ void BAProblem::addObservation(CameraCalib& calib, Vec3& world_pt, const Vec2& i
 
 void BAProblem::optimize() {
   impl_->optimize();
+}
+
+void BAProblem::setPrincipalPointVariable() {
+  impl_->setPrincipalPointVariable();
+}
+
+void BAProblem::setPrincipalPointConstant() {
+  impl_->setPrincipalPointConstant();
 }
 
 } // namespace calib3d
