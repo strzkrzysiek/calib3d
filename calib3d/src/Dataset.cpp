@@ -75,10 +75,86 @@ bool Dataset::loadFromJson(const std::string& filename) {
     }
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+
     return false;
   }
 
   return true;
 }
+
+void Dataset::addObservationNoise(double noise, size_t seed) {
+  std::mt19937 rng(seed);
+  std::normal_distribution<double> gaussian_noise(0.0, noise);
+
+  for (auto& [cam_id, camera_bundle] : cameras) {
+    for (auto& [pt_id, image_pt] : camera_bundle.observations) {
+      image_pt.x() += gaussian_noise(rng);
+      image_pt.y() += gaussian_noise(rng);
+    }
+  }
+}
+
+void Dataset::addObservationOutliers(double inlier_prob, size_t seed) {
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<double> inlier_dist(0., 1.0);
+
+  for (auto& [cam_id, camera_bundle] : cameras) {
+    std::uniform_real_distribution<double> x_dist(0., camera_bundle.calib.size.x());
+    std::uniform_real_distribution<double> y_dist(0., camera_bundle.calib.size.y());
+
+    for (auto& [pt_id, image_pt] : camera_bundle.observations) {
+      if (inlier_dist(rng) < inlier_prob) {
+        continue;
+      }
+
+      image_pt.x() = x_dist(rng);
+      image_pt.y() = y_dist(rng);
+    }
+  }
+}
+
+std::vector<PointId> Dataset::getCommonPointIds(const std::vector<CamId>& cam_ids) const {
+  CHECK(!cam_ids.empty());
+
+  std::vector<PointId> common_pt_ids;
+
+  const auto& cam0_obs = cameras.at(cam_ids[0]).observations;
+  for (const auto& [pt_id, image_pt] : cam0_obs) {
+    bool is_common_point = true;
+    for (size_t i = 1; i < cam_ids.size(); i++) {
+      if (!cameras.at(cam_ids[i]).observations.contains(pt_id)) {
+        is_common_point = false;
+        break;
+      }
+    }
+    if (is_common_point) {
+      common_pt_ids.push_back(pt_id);
+    }
+  }
+
+  return common_pt_ids;
+}
+
+Mat2X Dataset::getImagePointArray(calib3d::CamId cam_id, const std::vector<PointId>& pt_ids) const {
+  Mat2X image_pts(2, pt_ids.size());
+  const auto& observations = cameras.at(cam_id).observations;
+
+  for (size_t i = 0; i < pt_ids.size(); i++) {
+    image_pts.col(i) = observations.at(pt_ids[i]);
+  }
+
+  return image_pts;
+}
+
+Mat3X Dataset::getWorldPointArray(const std::vector<PointId>& pt_ids) const {
+  Mat3X world_pts(3, pt_ids.size());
+
+  for (size_t i = 0; i < pt_ids.size(); i++) {
+    world_pts.col(i) = world_points.at(pt_ids[i]);
+  }
+
+  return world_pts;
+}
+
 
 } // namespace calib3d

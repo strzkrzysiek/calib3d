@@ -62,6 +62,7 @@ std::pair<Mat3X, Mat2X> NViewReconstruction::prepare3D2DCorrespondences(const Ca
 
 void NViewReconstruction::optimizeNewCamera(CamId cam_id, const Observations& cam_obs) {
   auto& calib = cameras_.at(cam_id);
+  ba_problem_.addCamera(calib, BAProblem::CameraType::CAM_N);
 
   for (const auto& [pt_id, image_pt] : cam_obs) {
     auto& pt_data = points_.at(pt_id);

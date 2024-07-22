@@ -43,6 +43,9 @@ struct BAProblem::Impl {
         cauchy_loss_(observation_noise) {}
 
   void addCamera(CameraCalib& calib, CameraType type = CameraType::CAM_N) {
+    problem_.AddParameterBlock(calib.intrinsics.principal_point.data(), 2);
+    problem_.SetParameterBlockConstant(calib.intrinsics.principal_point.data());
+
     problem_.AddParameterBlock(calib.world2cam.data(), SE3::num_parameters);
 
     switch (type) {

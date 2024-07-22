@@ -118,6 +118,33 @@ TEST_F(ReconstructionTestFixture, ThreeView) {
   verifyWorldPoints(reconstruction);
 }
 
+TEST_F(ReconstructionTestFixture, DISABLE_ThreeViewNoisyObservations) {
+  const double observation_noise = 3.0;
+  const size_t seed = 7;
+  dataset.addObservationNoise(observation_noise, seed);
+
+  f_abs_tolerance_ = 100.;
+  principal_point_abs_tolerance_ = 10.0;
+  cam_t_abs_tolerance_ = 0.25;
+  cam_R_abs_tolerance_in_degrees_ = 5.0;
+  world_pt_abs_tolerance_ = 0.25;
+
+  ThreeViewReconstruction reconstruction(observation_noise);
+
+  reconstruction.reconstruct(0,
+                             dataset.cameras[0].calib.size,
+                             dataset.cameras[0].observations,
+                             1,
+                             dataset.cameras[1].calib.size,
+                             dataset.cameras[1].observations,
+                             2,
+                             dataset.cameras[2].calib.size,
+                             dataset.cameras[2].observations);
+
+  verifyCameras(reconstruction);
+  verifyWorldPoints(reconstruction);
+}
+
 TEST_F(ReconstructionTestFixture, ThreeViewWithBA) {
   const double observation_noise = 3.0;
 
@@ -137,8 +164,107 @@ TEST_F(ReconstructionTestFixture, ThreeViewWithBA) {
   verifyWorldPoints(reconstruction);
 }
 
+TEST_F(ReconstructionTestFixture, ThreeViewWithBANoisyObservations) {
+  const double observation_noise = 3.0;
+  const size_t seed = 7;
+  dataset.addObservationNoise(observation_noise, seed);
+
+  f_abs_tolerance_ = 100.;
+  principal_point_abs_tolerance_ = 10.0;
+  cam_t_abs_tolerance_ = 0.25;
+  cam_R_abs_tolerance_in_degrees_ = 5.0;
+  world_pt_abs_tolerance_ = 0.25;
+
+  ThreeViewReconstructionWithBA reconstruction(observation_noise);
+
+  reconstruction.reconstruct(0,
+                             dataset.cameras[0].calib.size,
+                             dataset.cameras[0].observations,
+                             1,
+                             dataset.cameras[1].calib.size,
+                             dataset.cameras[1].observations,
+                             2,
+                             dataset.cameras[2].calib.size,
+                             dataset.cameras[2].observations);
+
+  verifyCameras(reconstruction);
+  verifyWorldPoints(reconstruction);
+}
+
 TEST_F(ReconstructionTestFixture, NView) {
   const double observation_noise = 3.0;
+
+  NViewReconstruction reconstruction(observation_noise);
+
+  reconstruction.initReconstruction(0,
+                                    dataset.cameras[0].calib.size,
+                                    dataset.cameras[0].observations,
+                                    1,
+                                    dataset.cameras[1].calib.size,
+                                    dataset.cameras[1].observations,
+                                    2,
+                                    dataset.cameras[2].calib.size,
+                                    dataset.cameras[2].observations);
+
+  for (const auto& [cam_id, cam_data] : dataset.cameras) {
+    if (cam_id < 3) {
+      continue;
+    }
+
+    reconstruction.addNewCamera(cam_id, cam_data.calib.size, cam_data.observations);
+  }
+
+  verifyCameras(reconstruction);
+  verifyWorldPoints(reconstruction);
+}
+
+TEST_F(ReconstructionTestFixture, NViewNoisyObservations) {
+  const double observation_noise = 1.0;
+  const size_t seed = 7;
+  dataset.addObservationNoise(observation_noise, seed);
+
+  f_abs_tolerance_ = 100.;
+  principal_point_abs_tolerance_ = 10.0;
+  cam_t_abs_tolerance_ = 0.25;
+  cam_R_abs_tolerance_in_degrees_ = 5.0;
+  world_pt_abs_tolerance_ = 0.25;
+
+  NViewReconstruction reconstruction(observation_noise);
+
+  reconstruction.initReconstruction(0,
+                                    dataset.cameras[0].calib.size,
+                                    dataset.cameras[0].observations,
+                                    1,
+                                    dataset.cameras[1].calib.size,
+                                    dataset.cameras[1].observations,
+                                    2,
+                                    dataset.cameras[2].calib.size,
+                                    dataset.cameras[2].observations);
+
+  for (const auto& [cam_id, cam_data] : dataset.cameras) {
+    if (cam_id < 3) {
+      continue;
+    }
+
+    reconstruction.addNewCamera(cam_id, cam_data.calib.size, cam_data.observations);
+  }
+
+  verifyCameras(reconstruction);
+  verifyWorldPoints(reconstruction);
+}
+
+TEST_F(ReconstructionTestFixture, NViewNoisyObservationsWithOutliers) {
+  const double observation_noise = 1.0;
+  const size_t seed = 7;
+  const double inlier_prob = 0.9;
+  dataset.addObservationNoise(observation_noise, seed);
+  dataset.addObservationOutliers(inlier_prob, seed);
+
+  f_abs_tolerance_ = 100.;
+  principal_point_abs_tolerance_ = 10.0;
+  cam_t_abs_tolerance_ = 0.25;
+  cam_R_abs_tolerance_in_degrees_ = 5.0;
+  world_pt_abs_tolerance_ = 0.25;
 
   NViewReconstruction reconstruction(observation_noise);
 
