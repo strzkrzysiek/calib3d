@@ -79,6 +79,33 @@ bool Dataset::loadFromJson(const std::string& filename) {
     return false;
   }
 
+  return verifyDataset();
+}
+
+bool Dataset::verifyDataset() const {
+  for (const auto& [cam_id, cam_bundle] : cameras) {
+    const auto& obs = cam_bundle.observations;
+
+    auto P = cam_bundle.calib.P();
+
+    for (const auto& [pt_id, image_pt] : obs) {
+      const auto& world_pt = world_points.at(pt_id);
+      Vec2 reprojected_pt = (P * world_pt.homogeneous()).hnormalized();
+      double reprojection_err = (reprojected_pt - image_pt).norm();
+
+      if (reprojection_err > 1e-4) {
+        LOG(ERROR) << "Dataset verification error";
+        LOG(ERROR) << "Cam ID: " << cam_id;
+        LOG(ERROR) << "Point ID: " << pt_id;
+        LOG(ERROR) << "True image point: " << image_pt.transpose();
+        LOG(ERROR) << "Reprojected point: " << reprojected_pt.transpose();
+        LOG(ERROR) << "Reprojection error: " << reprojection_err;
+
+        return false;
+      }
+    }
+  }
+
   return true;
 }
 

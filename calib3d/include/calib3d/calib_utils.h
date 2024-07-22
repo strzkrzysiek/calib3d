@@ -59,6 +59,18 @@ Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> triangulatePoints(const Ei
                                                                         const Eigen::Matrix<double, 3, 4>& P1,
                                                                         const Eigen::Matrix<double, 3, 4>& P2);
 
+template <class Derived2D, class DerivedPFlat>
+Eigen::Vector3d triangulatePoint(const Eigen::DenseBase<Derived2D>& image_points,
+                                 const Eigen::DenseBase<DerivedPFlat>& Ps_flattened);
+
+template <class Derived2D, class DerivedPFlat>
+Eigen::Vector3d triangulatePointRansac(const Eigen::DenseBase<Derived2D>& image_points,
+                                       const Eigen::DenseBase<DerivedPFlat>& Ps_flattened,
+                                       double ransac_thr,
+                                       double confidence,
+                                       size_t max_iters,
+                                       size_t seed = std::random_device()());
+
 } // namespace calib3d
 
 #include <calib3d/calib_utils.hpp>

@@ -63,6 +63,15 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
     }
   }
 
+  if (consensus_set_ids.size() < Spec::MinSampleSize) {
+    LOG(WARNING) << "Consensus set (" << consensus_set_ids.size()
+                 << ") is smaller than the minimal required sample size";
+    LOG(WARNING) << "Consider increasing the max_iters argument.";
+    LOG(WARNING) << "Fitting with all provided data.";
+
+    return Spec::template fitModel(points1, points2);
+  }
+
   LOG(INFO) << "Final estimation using " << consensus_set_ids.size()
             << " inliers with stddev: " << consensus_set_stddev;
 

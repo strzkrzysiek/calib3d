@@ -17,9 +17,11 @@ struct CameraBundle {
 
 struct Dataset {
   std::map<CamId, CameraBundle> cameras;
-  std::map<PointId, Eigen::Vector3d> world_points;
+  std::map<PointId, Vec3> world_points;
 
   bool loadFromJson(const std::string& filename);
+
+  bool verifyDataset() const;
 
   void addObservationNoise(double noise, size_t seed = std::random_device()());
   void addObservationOutliers(double inlier_prob, size_t seed = std::random_device()());

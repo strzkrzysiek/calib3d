@@ -187,8 +187,8 @@ Eigen::Matrix<double, 3, 4> findProjectionMatrix(const Eigen::DenseBase<Derived3
   A.setZero();
 
   for (size_t i = 0; i < n_points; i++) {
-    A.template block<1, 4>(2 * i, 0) = image_points_normed(2, i) * world_points_normed.col(i);
-    A.template block<1, 4>(2 * i, 8) = -image_points_normed(0, i) * world_points_normed.col(i);
+    A.template block<1, 4>(2 * i + 0, 0) = image_points_normed(2, i) * world_points_normed.col(i);
+    A.template block<1, 4>(2 * i + 0, 8) = -image_points_normed(0, i) * world_points_normed.col(i);
     A.template block<1, 4>(2 * i + 1, 4) = image_points_normed(2, i) * world_points_normed.col(i);
     A.template block<1, 4>(2 * i + 1, 8) = -image_points_normed(1, i) * world_points_normed.col(i);
   }
@@ -258,6 +258,72 @@ Eigen::Matrix<double, 3, Derived1::ColsAtCompileTime> triangulatePoints(const Ei
   }
 
   return world_points;
+}
+
+template <class Derived2D, class DerivedPFlat>
+Eigen::Vector3d triangulatePoint(const Eigen::DenseBase<Derived2D>& image_points,
+                                 const Eigen::DenseBase<DerivedPFlat>& Ps_flattened) {
+  static_assert(Derived2D::RowsAtCompileTime == 2);
+  static_assert(DerivedPFlat::RowsAtCompileTime == 3 * 4);
+  CHECK_EQ(image_points.cols(), Ps_flattened.cols());
+
+  const int n_points = image_points.cols();
+  CHECK_GE(n_points, 2);
+
+  constexpr auto ARows =
+      (Derived2D::ColsAtCompileTime == Eigen::Dynamic) ? Eigen::Dynamic : 2 * Derived2D::ColsAtCompileTime;
+  Eigen::Matrix<double, ARows, 4> A(n_points * 2, 4);
+  A.setZero();
+
+  for (int i = 0; i < n_points; i++) {
+    Eigen::Matrix<double, 3, 4> P = Ps_flattened.col(i).reshaped(3, 4);
+    Eigen::Vector2d pt = image_points.col(i);
+    A.row(2 * i + 0) = pt.x() * P.row(2) - P.row(0);
+    A.row(2 * i + 1) = pt.y() * P.row(2) - P.row(1);
+  }
+
+  Eigen::JacobiSVD svd_A(A, Eigen::ComputeFullV);
+  Eigen::Vector3d world_pt = svd_A.matrixV().col(3).hnormalized();
+
+  return world_pt;
+}
+
+struct TriangulationRansacSpec {
+  using ModelMatrix = Eigen::Vector3d;
+  static constexpr size_t MinSampleSize = 2;
+  static constexpr size_t Dim1 = 2;
+  static constexpr size_t Dim2 = 12;
+
+  template <class Derived2D, class DerivedPFlat>
+  static ModelMatrix fitModel(const Eigen::DenseBase<Derived2D>& image_pts, const Eigen::DenseBase<DerivedPFlat>& Ps) {
+    return triangulatePoint(image_pts, Ps);
+  }
+
+  template <class Derived2D, class DerivedPFlat>
+  static Eigen::Vector<double, Derived2D::ColsAtCompileTime> distance(const Eigen::DenseBase<Derived2D>& image_pts,
+                                                                      const Eigen::DenseBase<DerivedPFlat>& Ps,
+                                                                      const ModelMatrix& world_pt) {
+    const int n_points = image_pts.cols();
+    Eigen::Vector<double, Derived2D::ColsAtCompileTime> squared_reprojection_err(n_points);
+
+    for (int i = 0; i < n_points; i++) {
+      auto reprojected_pt = (Ps.col(i).reshaped(3, 4) * world_pt.homogeneous()).hnormalized();
+      squared_reprojection_err(i) = (reprojected_pt - image_pts.col(i)).squaredNorm();
+    }
+
+    return squared_reprojection_err;
+  }
+};
+
+template <class Derived2D, class DerivedPFlat>
+Eigen::Vector3d triangulatePointRansac(const Eigen::DenseBase<Derived2D>& image_points,
+                                       const Eigen::DenseBase<DerivedPFlat>& Ps_flattened,
+                                       double ransac_thr,
+                                       double confidence,
+                                       size_t max_iters,
+                                       size_t seed) {
+  return RansacEngine<TriangulationRansacSpec>::fit(
+      image_points, Ps_flattened, ransac_thr, confidence, max_iters, seed);
 }
 
 } // namespace calib3d

@@ -312,3 +312,44 @@ TEST_F(CalibUtilsTestFixture, TriangulatePoints) {
 
   EXPECT_TRUE((triangulated_pts - world_pts).colwise().squaredNorm().isZero());
 }
+
+TEST_F(CalibUtilsTestFixture, TriangulatePointsRansac) {
+  const size_t seed = 7;
+  const size_t ransac_seed = 45;
+  const double inlier_prob = 0.9;
+
+  const double observation_noise = 2.0;
+  const double inlier_thr = observation_noise * 5.99;
+
+  dataset.addObservationOutliers(inlier_prob, seed);
+
+  for (const auto& [pt_id, true_world_pt] : dataset.world_points) {
+    Mat2X image_pts(2, dataset.cameras.size());
+    Eigen::Matrix<double, 12, Eigen::Dynamic> Ps_flattened(12, dataset.cameras.size());
+
+    int n_points = 0;
+    for (const auto& [cam_id, cam_data] : dataset.cameras) {
+      auto obs_it = cam_data.observations.find(pt_id);
+      if (obs_it == cam_data.observations.end()) {
+        continue;
+      }
+
+      image_pts.col(n_points) = obs_it->second;
+      Ps_flattened.col(n_points) = cam_data.calib.P().reshaped();
+      n_points++;
+    }
+
+    if (n_points < 2) {
+      continue;
+    }
+
+    image_pts.conservativeResize(Eigen::NoChange, n_points);
+    Ps_flattened.conservativeResize(Eigen::NoChange, n_points);
+
+    Vec3 recon_world_pt = triangulatePointRansac(image_pts, Ps_flattened, inlier_thr, 0.99, 100, ransac_seed);
+    LOG(INFO) << "Pt " << pt_id << ": " << recon_world_pt.transpose() << " vs. " << true_world_pt.transpose();
+    EXPECT_NEAR(recon_world_pt.x(), true_world_pt.x(), 1e-2) << "PT: " << pt_id;
+    EXPECT_NEAR(recon_world_pt.y(), true_world_pt.y(), 1e-2) << "PT: " << pt_id;
+    EXPECT_NEAR(recon_world_pt.z(), true_world_pt.z(), 1e-2) << "PT: " << pt_id;
+  }
+}
