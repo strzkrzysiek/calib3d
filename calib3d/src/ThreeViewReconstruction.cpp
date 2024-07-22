@@ -7,6 +7,7 @@
 #include <cmath>
 #include <glog/logging.h>
 
+#include <calib3d/CameraCalibRefinementProblem.h>
 #include <calib3d/calib_utils.h>
 
 namespace calib3d {
@@ -40,7 +41,7 @@ void ThreeViewReconstruction::reconstruct(CamId cam0_id,
   insertCameraData(cam1_id, cam1_size, cam1_obs);
   insertCameraData(cam2_id, cam2_size, cam2_obs);
 
-  performThreeViewReconstruction();
+  performThreeViewReconstruction({cam0_id, cam1_id, cam2_id});
 }
 
 void ThreeViewReconstruction::insertCameraData(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs) {
@@ -50,19 +51,24 @@ void ThreeViewReconstruction::insertCameraData(CamId cam_id, const CameraSize& c
   }
 }
 
-void ThreeViewReconstruction::performThreeViewReconstruction() {
-  const auto [common_pt_ids, image_pts] = prepareCommonObservations();
+void ThreeViewReconstruction::performThreeViewReconstruction(const ThreeOf<CamId>& cam_ids) {
+  const auto [common_pt_ids, image_pts] = prepareCommonObservations(cam_ids);
 
   LOG(INFO) << "Performing 3-view reconstruction with " << common_pt_ids.size() << " points";
 
   auto [P, world_pts] = performProjectiveReconstruction(image_pts);
   auto K = performMetricRectification(P, world_pts);
-  recoverCameraCalibrations(P, K);
+  recoverCameraCalibrations(cam_ids, P, K);
+  refineCameraCalibrations(cam_ids, P, world_pts, image_pts);
+
+  fixRotationAndScale(cam_ids, world_pts);
+
   writeBackWorldPoints(common_pt_ids, world_pts);
   triangulateRemainingPoints();
 }
 
-std::pair<std::vector<PointId>, ThreeOf<Mat2X>> ThreeViewReconstruction::prepareCommonObservations() const {
+std::pair<std::vector<PointId>, ThreeOf<Mat2X>> ThreeViewReconstruction::prepareCommonObservations(
+    const ThreeOf<CamId>& cam_ids) const {
   std::vector<PointId> common_pt_ids;
   ThreeOf<Eigen::Matrix2Xd> image_pts;
 
@@ -73,13 +79,10 @@ std::pair<std::vector<PointId>, ThreeOf<Mat2X>> ThreeViewReconstruction::prepare
   image_pts[1].resize(2, max_required_capacity);
   image_pts[2].resize(2, max_required_capacity);
 
-  ThreeOf<CamId> cam_ids;
   ThreeOf<Vec2> principal_pt_offsets;
-  auto cameras_it = cameras_.begin();
   for (size_t i = 0; i < 3; i++) {
-    cam_ids[i] = cameras_it->first;
-    principal_pt_offsets[i] = cameras_it->second.size.cast<double>() / 2.;
-    ++cameras_it;
+    CamId cam_id = cam_ids[i];
+    principal_pt_offsets[i] = cameras_.at(cam_id).size.cast<double>() / 2.;
   }
 
   for (const auto& [pt_id, pt_data] : points_) {
@@ -143,7 +146,7 @@ Mat3x4 ThreeViewReconstruction::getProjectionMatrixFromFundamentalMatrix(const M
 ThreeOf<Mat3> ThreeViewReconstruction::performMetricRectification(ThreeOf<Mat3x4>& P, Mat3X& world_pts) {
   Mat4 ADQ = findAbsoluteDualQuadratic(P);
   ThreeOf<Mat3> K = findCameraMatrices(ADQ, P);
-  Mat4 H = findRectifyingHomography(ADQ, K[0], P, world_pts);
+  Mat4 H = findRectifyingHomography(ADQ, K[0], world_pts);
   transformReconstruction(H, P, world_pts);
 
   return K;
@@ -228,10 +231,7 @@ Mat3 ThreeViewReconstruction::findCameraMatrix(const calib3d::Mat4& ADQ, const c
   return Eigen::Vector3d(focal_length, focal_length, 1.0).asDiagonal();
 }
 
-Mat4 ThreeViewReconstruction::findRectifyingHomography(const Mat4& ADQ,
-                                                       const Mat3& K0,
-                                                       const ThreeOf<Mat3x4>& P,
-                                                       const Mat3X& world_pts) {
+Mat4 ThreeViewReconstruction::findRectifyingHomography(const Mat4& ADQ, const Mat3& K0, const Mat3X& world_pts) {
   Vec3 plane_at_infinity = Eigen::JacobiSVD(ADQ, Eigen::ComputeFullV).matrixV().col(3).hnormalized();
 
   LOG(INFO) << "Plane at infinity: " << plane_at_infinity.transpose();
@@ -240,7 +240,7 @@ Mat4 ThreeViewReconstruction::findRectifyingHomography(const Mat4& ADQ,
   H.topLeftCorner<3, 3>() = K0;
   H.bottomLeftCorner<1, 3>() = -plane_at_infinity.transpose() * K0;
 
-  LOG(INFO) << "Rectifying H candidate:\n" << H;
+  LOG(INFO) << "Rectifying H:\n" << H;
 
   Mat3X potential_metric_world_pts = (H.inverse() * world_pts.colwise().homogeneous()).colwise().hnormalized();
 
@@ -252,20 +252,8 @@ Mat4 ThreeViewReconstruction::findRectifyingHomography(const Mat4& ADQ,
   if (2 * n_points_in_front_of_the_camera < world_pts.cols()) {
     LOG(INFO) << "Reflection detected. Multiplying the pointcloud by -1.";
     H = H * Vec4(-1., -1., -1., 1.).asDiagonal();
-    LOG(INFO) << "New H candidate:\n" << H;
+    LOG(INFO) << "New H:\n" << H;
   }
-
-  Mat3x4 metric_P1 = P[1] * H;
-  LOG(INFO) << "Metric P1 for cam1 center calculations:\n" << metric_P1;
-
-  Vec3 cam1_center = Eigen::JacobiSVD(metric_P1, Eigen::ComputeFullV).matrixV().col(3).hnormalized();
-  LOG(INFO) << "Cam1 center: " << cam1_center.transpose();
-
-  double cam1_dist_from_origin = cam1_center.norm();
-  LOG(INFO) << "Cam1 distance from origin: " << cam1_dist_from_origin;
-
-  H = H * Vec4(cam1_dist_from_origin, cam1_dist_from_origin, cam1_dist_from_origin, 1.).asDiagonal();
-  LOG(INFO) << "Final rectifying H:\n" << H;
 
   return H;
 }
@@ -280,15 +268,14 @@ void ThreeViewReconstruction::transformReconstruction(const Mat4& H, ThreeOf<Mat
   LOG(INFO) << "Rectified world_pts:\n" << world_pts.leftCols<3>().transpose();
 }
 
-void ThreeViewReconstruction::recoverCameraCalibrations(const ThreeOf<Mat3x4>& P, const ThreeOf<Mat3>& K) {
-  auto cameras_it = cameras_.begin();
+void ThreeViewReconstruction::recoverCameraCalibrations(const ThreeOf<CamId>& cam_ids,
+                                                        const ThreeOf<Mat3x4>& P,
+                                                        const ThreeOf<Mat3>& K) {
   for (size_t i = 0; i < 3; i++) {
-    auto& [cam_id, camera_calib] = *cameras_it;
+    CamId cam_id = cam_ids[i];
 
     LOG(INFO) << "Recovering camera ID: " << cam_id;
-    recoverCameraCalibration(P[i], K[i], camera_calib);
-
-    ++cameras_it;
+    recoverCameraCalibration(P[i], K[i], cameras_.at(cam_id));
   }
 }
 
@@ -297,9 +284,7 @@ void ThreeViewReconstruction::recoverCameraCalibration(const Mat3x4& P, const Ma
   LOG(INFO) << "Cam center: " << cam_center.transpose();
 
   Mat3x4 Kinv_P = normalizeMatrix(K.inverse() * P);
-  if (Kinv_P.leftCols<3>().determinant() < 0) {
-    Kinv_P *= -1.;
-  }
+  Kinv_P *= Kinv_P.leftCols<3>().determinant();
 
   Eigen::HouseholderQR<Eigen::Matrix<double, 3, 4>> qr(Kinv_P);
   Eigen::Matrix3d qr_Q = qr.householderQ();
@@ -314,6 +299,52 @@ void ThreeViewReconstruction::recoverCameraCalibration(const Mat3x4& P, const Ma
   calib.intrinsics.principal_point = calib.size.cast<double>() / 2.;
   calib.world2cam.setRotationMatrix(Rmat);
   calib.world2cam.translation() = tvec;
+}
+
+void ThreeViewReconstruction::refineCameraCalibrations(const ThreeOf<CamId>& cam_ids,
+                                                       const ThreeOf<Mat3x4>& P,
+                                                       const Mat3X& world_pts,
+                                                       const ThreeOf<Mat2X>& image_pts) {
+  for (size_t i = 0; i < 3; i++) {
+    CamId cam_id = cam_ids[i];
+
+    LOG(INFO) << "Refining camera ID: " << cam_id;
+    refineCameraCalibration(P[i], world_pts, image_pts[i], cameras_.at(cam_id));
+  }
+}
+
+void ThreeViewReconstruction::refineCameraCalibration(const Mat3x4& P,
+                                                      const Mat3X& world_pts,
+                                                      const Mat2X& image_pts,
+                                                      CameraCalib& calib) const {
+  CameraCalibRefinementProblem problem(calib, P, ransac_thr_);
+  problem.addCorrespondences(world_pts, image_pts);
+  problem.optimize();
+}
+
+void ThreeViewReconstruction::fixRotationAndScale(const ThreeOf<CamId>& cam_ids, calib3d::Mat3X& world_pts) {
+  const auto& init_cam = cameras_.at(cam_ids[0]);
+  SE3 world2init_cam = init_cam.world2cam;
+  SE3 init_cam2world = world2init_cam.inverse();
+
+  LOG(INFO) << "Fixing orientation and scale";
+  LOG(INFO) << "Orientation update in degrees: " << init_cam2world.so3().logAndTheta().theta / M_PI * 180.;
+  LOG(INFO) << "Translation update: " << init_cam2world.translation().transpose();
+
+  for (auto& [cam_id, cam_calib] : cameras_) {
+    cam_calib.world2cam = cam_calib.world2cam * init_cam2world;
+  }
+  world_pts = world2init_cam.matrix3x4() * world_pts.colwise().homogeneous();
+
+  const auto& second_cam = cameras_.at(cam_ids[1]);
+  double second_cam_distance_from_origin = second_cam.world2cam.translation().norm();
+  double scaling_factor = 1.0 / second_cam_distance_from_origin;
+  LOG(INFO) << "Scaling factor: " << scaling_factor;
+
+  for (auto& [cam_id, cam_calib] : cameras_) {
+    cam_calib.world2cam.translation() *= scaling_factor;
+  }
+  world_pts *= scaling_factor;
 }
 
 void ThreeViewReconstruction::writeBackWorldPoints(const std::vector<PointId>& common_pt_ids, const Mat3X& world_pts) {

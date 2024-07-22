@@ -29,9 +29,10 @@ public:
 protected:
   void insertCameraData(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs);
 
-  void performThreeViewReconstruction();
+  void performThreeViewReconstruction(const ThreeOf<CamId>& cam_ids);
 
-  [[nodiscard]] std::pair<std::vector<PointId>, ThreeOf<Mat2X>> prepareCommonObservations() const;
+  [[nodiscard]] std::pair<std::vector<PointId>, ThreeOf<Mat2X>> prepareCommonObservations(
+      const ThreeOf<CamId>& cam_ids) const;
 
   [[nodiscard]] std::pair<ThreeOf<Mat3x4>, Mat3X> performProjectiveReconstruction(
       const ThreeOf<Mat2X>& image_pts) const;
@@ -41,14 +42,22 @@ protected:
   [[nodiscard]] static Mat4 findAbsoluteDualQuadratic(const ThreeOf<Mat3x4>& P);
   [[nodiscard]] static ThreeOf<Mat3> findCameraMatrices(const Mat4& ADQ, const ThreeOf<Mat3x4>& P);
   [[nodiscard]] static Mat3 findCameraMatrix(const Mat4& ADQ, const Mat3x4& P);
-  [[nodiscard]] static Mat4 findRectifyingHomography(const Mat4& ADQ,
-                                                     const Mat3& K0,
-                                                     const ThreeOf<Mat3x4>& P,
-                                                     const Mat3X& world_pts);
+  [[nodiscard]] static Mat4 findRectifyingHomography(const Mat4& ADQ, const Mat3& K0, const Mat3X& world_pts);
   static void transformReconstruction(const Mat4& H, ThreeOf<Mat3x4>& P, Mat3X& world_pts);
 
-  void recoverCameraCalibrations(const ThreeOf<Mat3x4>& P, const ThreeOf<Mat3>& K);
+  void recoverCameraCalibrations(const ThreeOf<CamId>& cam_ids, const ThreeOf<Mat3x4>& P, const ThreeOf<Mat3>& K);
   static void recoverCameraCalibration(const Mat3x4& P, const Mat3& K, CameraCalib& calib);
+
+  void refineCameraCalibrations(const ThreeOf<CamId>& cam_ids,
+                                const ThreeOf<Mat3x4>& P,
+                                const Mat3X& world_pts,
+                                const ThreeOf<Mat2X>& image_pts);
+  void refineCameraCalibration(const Mat3x4& P,
+                               const Mat3X& world_pts,
+                               const Mat2X& image_pts,
+                               CameraCalib& calib) const;
+
+  void fixRotationAndScale(const ThreeOf<CamId>& cam_ids, Mat3X& world_pts);
 
   void writeBackWorldPoints(const std::vector<PointId>& common_pt_ids, const Mat3X& world_pts);
 

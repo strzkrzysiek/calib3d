@@ -2,6 +2,7 @@ add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 add_library(calib3d
     include/calib3d/BAProblem.h
+    include/calib3d/CameraCalibRefinementProblem.h
     include/calib3d/calib_utils.h
     include/calib3d/calib_utils.hpp
     include/calib3d/Dataset.h
@@ -12,6 +13,7 @@ add_library(calib3d
     include/calib3d/ThreeViewReconstructionWithBA.h
     include/calib3d/types.h
     src/BAProblem.cpp
+    src/CameraCalibRefinementProblem.cpp
     src/Dataset.cpp
     src/NViewReconstruction.cpp
     src/ThreeViewReconstruction.cpp
@@ -19,6 +21,7 @@ add_library(calib3d
 )
 
 set_source_files_properties(src/BAProblem.cpp PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
+set_source_files_properties(src/CameraCalibRefinementProblem.cpp PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
 
 target_include_directories(calib3d
     PUBLIC

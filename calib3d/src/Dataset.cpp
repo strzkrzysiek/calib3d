@@ -156,5 +156,4 @@ Mat3X Dataset::getWorldPointArray(const std::vector<PointId>& pt_ids) const {
   return world_pts;
 }
 
-
 } // namespace calib3d

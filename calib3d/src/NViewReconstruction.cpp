@@ -31,8 +31,41 @@ void NViewReconstruction::initializeNewCamera(CamId cam_id, const CameraSize& ca
   const auto [world_pts, image_pts] = prepare3D2DCorrespondences(cam_size, cam_obs);
   Mat3x4 P = findProjectionMatrixRansac(world_pts, image_pts, ransac_thr_, ransac_confidence_, ransac_max_iters_);
 
+  {
+    Mat3X projected_hom = P * world_pts.colwise().homogeneous();
+    Mat2X projected_img = projected_hom.colwise().hnormalized();
+    Mat2X residual = projected_img - image_pts;
+    Vec2 residual_bias = residual.rowwise().mean();
+    LOG(INFO) << "Projection BIAS (1): " << residual_bias.transpose();
+  }
+
   Mat3 K = findCameraMatrix(metric_ADQ_, P);
   recoverCameraCalibration(P, K, cameras_[cam_id]);
+
+  const auto& calib = cameras_[cam_id];
+  {
+    Mat3 K_test = calib.intrinsics.K().diagonal().asDiagonal();
+    Mat3x4 P_test = K_test * calib.world2cam.matrix3x4();
+
+    Mat3X projected_hom = P_test * world_pts.colwise().homogeneous();
+    Mat2X projected_img = projected_hom.colwise().hnormalized();
+    Mat2X residual = projected_img - image_pts;
+    Vec2 residual_bias = residual.rowwise().mean();
+    LOG(INFO) << "Projection BIAS (after recovering): " << residual_bias.transpose();
+  }
+
+  refineCameraCalibration(P, world_pts, image_pts, cameras_[cam_id]);
+
+  {
+    Mat3 K_test = calib.intrinsics.K().diagonal().asDiagonal();
+    Mat3x4 P_test = K_test * calib.world2cam.matrix3x4();
+
+    Mat3X projected_hom = P_test * world_pts.colwise().homogeneous();
+    Mat2X projected_img = projected_hom.colwise().hnormalized();
+    Mat2X residual = projected_img - image_pts;
+    Vec2 residual_bias = residual.rowwise().mean();
+    LOG(INFO) << "Projection BIAS (after refining): " << residual_bias.transpose();
+  }
 }
 
 std::pair<Mat3X, Mat2X> NViewReconstruction::prepare3D2DCorrespondences(const CameraSize& cam_size,

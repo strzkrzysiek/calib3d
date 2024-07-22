@@ -1,5 +1,7 @@
 #include <calib3d/ThreeViewReconstructionWithBA.h>
 
+#include <glog/logging.h>
+
 namespace calib3d {
 
 ThreeViewReconstructionWithBA::ThreeViewReconstructionWithBA(double observation_noise)
@@ -28,6 +30,7 @@ void ThreeViewReconstructionWithBA::reconstruct(CamId cam0_id,
 
     auto& world_pt = pt_data.world_pt.value();
     for (auto& [cam_id, image_pt] : pt_data.image_pts) {
+      LOG(INFO) << "Adding observation (PT: " << pt_id << "; CAM: " << cam_id << ")";
       ba_problem_.addObservation(cameras_.at(cam_id), world_pt, image_pt);
     }
   }
