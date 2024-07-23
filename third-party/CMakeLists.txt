@@ -1,3 +1,5 @@
+# Copyright 2024 Krzysztof Wrobel
+
 # --- ceres-solver
 set(BUILD_TESTING OFF CACHE BOOL "disable tests build for ceres" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "do not build ceres examples" FORCE)

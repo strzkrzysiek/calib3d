@@ -1,3 +1,5 @@
+// Copyright 2024 Krzysztof Wrobel
+
 #include <calib3d/ThreeViewReconstructionWithBA.h>
 
 #include <glog/logging.h>

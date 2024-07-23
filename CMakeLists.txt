@@ -1,3 +1,5 @@
+# Copyright 2024 Krzysztof Wrobel
+
 cmake_minimum_required(VERSION 3.16)
 
 project(bolt6-ba LANGUAGES CXX)

@@ -1,3 +1,5 @@
+// Copyright 2024 Krzysztof Wrobel
+
 #include <calib3d/NViewReconstruction.h>
 
 #include <calib3d/calib_utils.h>

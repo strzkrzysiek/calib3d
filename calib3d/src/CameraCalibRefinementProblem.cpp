@@ -1,3 +1,5 @@
+// Copyright 2024 Krzysztof Wrobel
+
 #include <calib3d/CameraCalibRefinementProblem.h>
 
 #include <ceres/ceres.h>

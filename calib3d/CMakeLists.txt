@@ -1,3 +1,5 @@
+# Copyright 2024 Krzysztof Wrobel
+
 add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 add_library(calib3d

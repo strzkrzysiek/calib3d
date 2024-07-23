@@ -1,3 +1,5 @@
+// Copyright 2024 Krzysztof Wrobel
+
 #pragma once
 
 #include <calib3d/BAProblem.h>
