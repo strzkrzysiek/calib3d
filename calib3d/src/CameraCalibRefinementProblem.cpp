@@ -59,12 +59,7 @@ struct CameraCalibRefinementProblem::Impl {
     ceres::Solver::Summary summary;
     ceres::Solve(solver_options_, &problem_, &summary);
 
-    LOG(INFO) << "Optimized calib";
-    LOG(INFO) << "F: " << calib_.intrinsics.focal_length;
-    LOG(INFO) << "tvec: " << calib_.world2cam.translation().transpose();
-    LOG(INFO) << "Rmat:\n" << calib_.world2cam.so3().matrix();
-
-    LOG(INFO) << "Solver report:\n" << summary.BriefReport();
+    VLOG(1) << "Calib refinement solver report:\n" << summary.BriefReport();
   }
 
   [[nodiscard]] static ceres::Problem::Options createProblemOptions() {
@@ -79,7 +74,7 @@ struct CameraCalibRefinementProblem::Impl {
     options.minimizer_type = ceres::TRUST_REGION;
     options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
     options.linear_solver_type = ceres::DENSE_QR;
-    options.logging_type = ceres::PER_MINIMIZER_ITERATION;
+    options.logging_type = ceres::SILENT;
 
     return options;
   }

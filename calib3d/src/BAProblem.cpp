@@ -84,15 +84,15 @@ struct BAProblem::Impl {
                               &calib.intrinsics.focal_length,
                               world_pt.data());
 
-    if constexpr (false) {
+    if (VLOG_IS_ON(2)) {
       Vec2 residual;
       std::vector<const double*> parameters = {calib.world2cam.data(),
                                                calib.intrinsics.principal_point.data(),
                                                &calib.intrinsics.focal_length,
                                                world_pt.data()};
       cost_function->Evaluate(parameters.data(), residual.data(), nullptr);
-      LOG(INFO) << "addObservation ( 3D: " << world_pt.transpose() << " / 2D: " << image_pt.transpose() << " )";
-      LOG(INFO) << "init residual: " << residual.transpose();
+      VLOG(2) << "addObservation ( 3D: " << world_pt.transpose() << " / 2D: " << image_pt.transpose() << " )";
+      VLOG(2) << "init residual: " << residual.transpose();
     }
   }
 
@@ -100,7 +100,11 @@ struct BAProblem::Impl {
     ceres::Solver::Summary summary;
     ceres::Solve(solver_options_, &problem_, &summary);
 
-    LOG(INFO) << "Solver report:\n" << summary.FullReport();
+    if (VLOG_IS_ON(2)) {
+      VLOG(2) << "BA Problem solver report:\n" << summary.FullReport();
+    } else {
+      VLOG(1) << "BA Problem solver report:\n" << summary.BriefReport();
+    }
   }
 
   void setPrincipalPointVariable() {
@@ -128,7 +132,7 @@ struct BAProblem::Impl {
     options.minimizer_type = ceres::TRUST_REGION;
     options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
     options.linear_solver_type = ceres::DENSE_SCHUR;
-    options.logging_type = ceres::PER_MINIMIZER_ITERATION;
+    options.logging_type = VLOG_IS_ON(2) ? ceres::PER_MINIMIZER_ITERATION : ceres::SILENT;
 
     return options;
   }

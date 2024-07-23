@@ -28,7 +28,7 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
   const double squared_thr = ransac_thr * ransac_thr;
 
   std::vector<size_t> consensus_set_ids;
-  double consensus_set_stddev = 0.;
+  double consensus_set_variance = 0.;
 
   for (size_t i = 0; i < max_iters; i++) {
     auto [sample1, sample2] = getRandomSample(points1, points2, rnd_gen);
@@ -39,25 +39,25 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
     const size_t n_inliers = inlier_ids.size();
 
     if (n_inliers >= consensus_set_ids.size() && n_inliers > 0) {
-      double inlier_stddev = squared_distances(inlier_ids).sum() / n_inliers;
+      double inlier_variance = squared_distances(inlier_ids).sum() / n_inliers;
 
-      if (n_inliers > consensus_set_ids.size() || inlier_stddev < consensus_set_stddev) {
+      if (n_inliers > consensus_set_ids.size() || inlier_variance < consensus_set_variance) {
         // New consensus set found
         consensus_set_ids = inlier_ids;
-        consensus_set_stddev = inlier_stddev;
+        consensus_set_variance = inlier_variance;
 
-        LOG(INFO) << "Iteration: " << i;
-        LOG(INFO) << "New consensus set: " << n_inliers << " (stddev: " << inlier_stddev << ")";
+        VLOG(3) << "Iteration: " << i;
+        VLOG(3) << "New consensus set: " << n_inliers << " (var: " << inlier_variance << ")";
 
         // Calculate new max_iters
         double inlier_ratio = static_cast<double>(n_inliers) / n_points;
-        LOG(INFO) << "Inlier ratio: " << inlier_ratio;
+        VLOG(3) << "Inlier ratio: " << inlier_ratio;
 
         auto new_max_iters = static_cast<size_t>(
             std::ceil(std::log(1. - confidence) / std::log(1. - std::pow(inlier_ratio, Spec::MinSampleSize))));
         if (new_max_iters < max_iters) {
           max_iters = new_max_iters;
-          LOG(INFO) << "New max iters: " << max_iters;
+          VLOG(3) << "New max iters: " << max_iters;
         }
       }
     }
@@ -72,8 +72,7 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
     return Spec::template fitModel(points1, points2);
   }
 
-  LOG(INFO) << "Final estimation using " << consensus_set_ids.size()
-            << " inliers with stddev: " << consensus_set_stddev;
+  VLOG(2) << "Final estimation using " << consensus_set_ids.size() << " inliers";
 
   return Spec::template fitModel(points1(Eigen::all, consensus_set_ids), points2(Eigen::all, consensus_set_ids));
 }

@@ -28,44 +28,20 @@ void NViewReconstruction::addNewCamera(CamId cam_id, const CameraSize& cam_size,
 }
 
 void NViewReconstruction::initializeNewCamera(CamId cam_id, const CameraSize& cam_size, const Observations& cam_obs) {
-  const auto [world_pts, image_pts, pt_ids] = prepare3D2DCorrespondences(cam_size, cam_obs);
-  Mat3x4 P = findProjectionMatrixRansac(world_pts, image_pts, ransac_thr_, ransac_confidence_, ransac_max_iters_);
+  VLOG(1) << "Adding camera (ID: " << cam_id << ")";
 
-  {
-    Mat3X projected_hom = P * world_pts.colwise().homogeneous();
-    Mat2X projected_img = projected_hom.colwise().hnormalized();
-    Mat2X residual = projected_img - image_pts;
-    Vec2 residual_bias = residual.rowwise().mean();
-    LOG(INFO) << "Projection BIAS (1): " << residual_bias.transpose();
-  }
+  const auto [world_pts, image_pts, pt_ids] = prepare3D2DCorrespondences(cam_size, cam_obs);
+
+  Mat3x4 P = findProjectionMatrixRansac(world_pts, image_pts, ransac_thr_, ransac_confidence_, ransac_max_iters_);
+  VLOG(2) << "Projection matrix:\n" << P;
 
   Mat3 K = findCameraMatrix(metric_ADQ_, P);
-  recoverCameraCalibration(P, K, cameras_[cam_id]);
 
-  const auto& calib = cameras_[cam_id];
-  {
-    Mat3 K_test = calib.intrinsics.K().diagonal().asDiagonal();
-    Mat3x4 P_test = K_test * calib.world2cam.matrix3x4();
-
-    Mat3X projected_hom = P_test * world_pts.colwise().homogeneous();
-    Mat2X projected_img = projected_hom.colwise().hnormalized();
-    Mat2X residual = projected_img - image_pts;
-    Vec2 residual_bias = residual.rowwise().mean();
-    LOG(INFO) << "Projection BIAS (after recovering): " << residual_bias.transpose();
-  }
-
-  refineCameraCalibration(P, world_pts, image_pts, cameras_[cam_id]);
-
-  {
-    Mat3 K_test = calib.intrinsics.K().diagonal().asDiagonal();
-    Mat3x4 P_test = K_test * calib.world2cam.matrix3x4();
-
-    Mat3X projected_hom = P_test * world_pts.colwise().homogeneous();
-    Mat2X projected_img = projected_hom.colwise().hnormalized();
-    Mat2X residual = projected_img - image_pts;
-    Vec2 residual_bias = residual.rowwise().mean();
-    LOG(INFO) << "Projection BIAS (after refining): " << residual_bias.transpose();
-  }
+  auto& calib = cameras_[cam_id];
+  VLOG(1) << "Recovering camera params";
+  recoverCameraCalibration(P, K, calib);
+  VLOG(1) << "Refining camera params";
+  refineCameraCalibration(P, world_pts, image_pts, calib);
 
   auto outlier_ids = identifyOutliers(cam_id, world_pts, image_pts, pt_ids);
   retriangulateOutliers(outlier_ids);
@@ -120,6 +96,7 @@ void NViewReconstruction::optimizeNewCamera(CamId cam_id, const Observations& ca
     }
   }
 
+  VLOG(1) << "Performing BA";
   ba_problem_.optimize();
 }
 

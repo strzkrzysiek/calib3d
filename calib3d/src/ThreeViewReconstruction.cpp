@@ -36,7 +36,7 @@ void ThreeViewReconstruction::reconstruct(CamId cam0_id,
                                           const Observations& cam2_obs) {
   CHECK(cameras_.empty());
 
-  LOG(INFO) << "Initializing 3-view reconstruction with cameras: " << cam0_id << ", " << cam1_id << ", " << cam2_id;
+  VLOG(1) << "Initializing 3-view reconstruction with cameras: " << cam0_id << ", " << cam1_id << ", " << cam2_id;
 
   insertCameraData(cam0_id, cam0_size, cam0_obs);
   insertCameraData(cam1_id, cam1_size, cam1_obs);
@@ -55,7 +55,7 @@ void ThreeViewReconstruction::insertCameraData(CamId cam_id, const CameraSize& c
 void ThreeViewReconstruction::performThreeViewReconstruction(const ThreeOf<CamId>& cam_ids) {
   const auto [common_pt_ids, image_pts] = prepareCommonObservations(cam_ids);
 
-  LOG(INFO) << "Performing 3-view reconstruction with " << common_pt_ids.size() << " points";
+  VLOG(1) << "Performing 3-view reconstruction with " << common_pt_ids.size() << " points";
 
   auto [P, world_pts] = performProjectiveReconstruction(image_pts);
   auto K = performMetricRectification(P, world_pts);
@@ -113,24 +113,21 @@ std::pair<ThreeOf<Mat3x4>, Mat3X> ThreeViewReconstruction::performProjectiveReco
   Mat3 F01 =
       findFundamentalMatrixRansac(image_pts[0], image_pts[1], ransac_thr_, ransac_confidence_, ransac_max_iters_);
 
-  LOG(INFO) << "Fundamental matrix between first and second camera calculated:\n" << F01;
+  VLOG(2) << "Fundamental matrix between first and second camera calculated:\n" << F01;
 
   ThreeOf<Mat3x4> P;
   P[0].setZero();
   P[0].leftCols<3>().setIdentity();
   P[1] = getProjectionMatrixFromFundamentalMatrix(F01);
 
-  LOG(INFO) << "First camera projection matrix:\n" << P[0];
-  LOG(INFO) << "Second camera projection matrix:\n" << P[1];
+  VLOG(2) << "First camera projection matrix:\n" << P[0];
+  VLOG(2) << "Second camera projection matrix:\n" << P[1];
 
   Mat3X world_pts = triangulatePoints(image_pts[0], image_pts[1], P[0], P[1]);
 
-  LOG(INFO) << "World points triangulated for projective reconstruction. First three points:\n"
-            << world_pts.leftCols<3>().transpose();
-
   P[2] = findProjectionMatrixRansac(world_pts, image_pts[2], ransac_thr_, ransac_confidence_, ransac_max_iters_);
 
-  LOG(INFO) << "Third camera projection matrix:\n" << P[2];
+  VLOG(2) << "Third camera projection matrix:\n" << P[2];
 
   return {P, world_pts};
 }
@@ -214,7 +211,7 @@ Mat4 ThreeViewReconstruction::findAbsoluteDualQuadratic(const ThreeOf<Mat3x4>& P
 
   ADQ = normalizeMatrix(ADQ);
 
-  LOG(INFO) << "Absolute dual quadratic (ADQ) calculated:\n" << ADQ;
+  VLOG(2) << "Absolute dual quadratic (ADQ) calculated:\n" << ADQ;
 
   return ADQ;
 }
@@ -227,10 +224,10 @@ Mat3 ThreeViewReconstruction::findCameraMatrix(const Mat4& ADQ, const Mat3x4& P)
   Mat3 DIAC = P * ADQ * P.transpose();
   DIAC /= DIAC(2, 2);
 
-  LOG(INFO) << "DIAC:\n" << DIAC;
+  VLOG(2) << "DIAC:\n" << DIAC;
 
   double focal_length = std::sqrt(DIAC(0, 0));
-  LOG(INFO) << "Focal length: " << focal_length;
+  VLOG(2) << "Focal length: " << focal_length;
 
   return Eigen::Vector3d(focal_length, focal_length, 1.0).asDiagonal();
 }
@@ -238,25 +235,22 @@ Mat3 ThreeViewReconstruction::findCameraMatrix(const Mat4& ADQ, const Mat3x4& P)
 Mat4 ThreeViewReconstruction::findRectifyingHomography(const Mat4& ADQ, const Mat3& K0, const Mat3X& world_pts) {
   Vec3 plane_at_infinity = Eigen::JacobiSVD(ADQ, Eigen::ComputeFullV).matrixV().col(3).hnormalized();
 
-  LOG(INFO) << "Plane at infinity: " << plane_at_infinity.transpose();
+  VLOG(2) << "Plane at infinity: " << plane_at_infinity.transpose();
 
   Mat4 H = Eigen::Matrix4d::Identity();
   H.topLeftCorner<3, 3>() = K0;
   H.bottomLeftCorner<1, 3>() = -plane_at_infinity.transpose() * K0;
 
-  LOG(INFO) << "Rectifying H:\n" << H;
+  VLOG(2) << "Rectifying H:\n" << H;
 
   Mat3X potential_metric_world_pts = (H.inverse() * world_pts.colwise().homogeneous()).colwise().hnormalized();
-
-  LOG(INFO) << "Probe Z axis of world_pts:\n" << potential_metric_world_pts.row(2);
-
   int n_points_in_front_of_the_camera = (potential_metric_world_pts.row(2).array() > 0.).count();
-  LOG(INFO) << "Points in front of the camera: " << n_points_in_front_of_the_camera << " / " << world_pts.cols();
+  VLOG(2) << "Points in front of the camera: " << n_points_in_front_of_the_camera << " / " << world_pts.cols();
 
   if (2 * n_points_in_front_of_the_camera < world_pts.cols()) {
-    LOG(INFO) << "Reflection detected. Multiplying the pointcloud by -1.";
+    VLOG(2) << "Reflection detected. Multiplying the pointcloud by -1.";
     H = H * Vec4(-1., -1., -1., 1.).asDiagonal();
-    LOG(INFO) << "New H:\n" << H;
+    VLOG(2) << "New H:\n" << H;
   }
 
   return H;
@@ -265,11 +259,10 @@ Mat4 ThreeViewReconstruction::findRectifyingHomography(const Mat4& ADQ, const Ma
 void ThreeViewReconstruction::transformReconstruction(const Mat4& H, ThreeOf<Mat3x4>& P, Mat3X& world_pts) {
   for (size_t i = 0; i < 3; i++) {
     P[i] = P[i] * H;
-    LOG(INFO) << "Rectified P " << i << ":\n" << P[i];
+    VLOG(2) << "Rectified P " << i << ":\n" << P[i];
   }
 
   world_pts = (H.inverse() * world_pts.colwise().homogeneous()).colwise().hnormalized();
-  LOG(INFO) << "Rectified world_pts:\n" << world_pts.leftCols<3>().transpose();
 }
 
 void ThreeViewReconstruction::recoverCameraCalibrations(const ThreeOf<CamId>& cam_ids,
@@ -278,14 +271,15 @@ void ThreeViewReconstruction::recoverCameraCalibrations(const ThreeOf<CamId>& ca
   for (size_t i = 0; i < 3; i++) {
     CamId cam_id = cam_ids[i];
 
-    LOG(INFO) << "Recovering camera ID: " << cam_id;
+    VLOG(1) << "Recovering camera ID: " << cam_id;
     recoverCameraCalibration(P[i], K[i], cameras_.at(cam_id));
   }
 }
 
 void ThreeViewReconstruction::recoverCameraCalibration(const Mat3x4& P, const Mat3& K, CameraCalib& calib) {
   Vec3 cam_center = Eigen::JacobiSVD(P, Eigen::ComputeFullV).matrixV().col(3).hnormalized();
-  LOG(INFO) << "Cam center: " << cam_center.transpose();
+  VLOG(1) << "Cam center: " << cam_center.transpose();
+  VLOG(1) << "Focal length: " << K(0, 0);
 
   Mat3x4 Kinv_P = normalizeMatrix(K.inverse() * P);
   Kinv_P *= Kinv_P.leftCols<3>().determinant();
@@ -296,8 +290,8 @@ void ThreeViewReconstruction::recoverCameraCalibration(const Mat3x4& P, const Ma
   Mat3 Rmat = qr_Q * qr_R.diagonal().array().sign().matrix().asDiagonal();
   Vec3 tvec = -Rmat * cam_center;
 
-  LOG(INFO) << "Rmat:\n" << Rmat;
-  LOG(INFO) << "tvec: " << tvec.transpose();
+  VLOG(1) << "Rotation matrix:\n" << Rmat;
+  VLOG(1) << "Translation: " << tvec.transpose();
 
   calib.intrinsics.focal_length = K(0, 0);
   calib.intrinsics.principal_point = calib.size.cast<double>() / 2.;
@@ -312,7 +306,7 @@ void ThreeViewReconstruction::refineCameraCalibrations(const ThreeOf<CamId>& cam
   for (size_t i = 0; i < 3; i++) {
     CamId cam_id = cam_ids[i];
 
-    LOG(INFO) << "Refining camera ID: " << cam_id;
+    VLOG(1) << "Refining camera ID: " << cam_id;
     refineCameraCalibration(P[i], world_pts, image_pts[i], cameras_.at(cam_id));
   }
 }
@@ -324,6 +318,11 @@ void ThreeViewReconstruction::refineCameraCalibration(const Mat3x4& P,
   CameraCalibRefinementProblem problem(calib, P, ransac_thr_);
   problem.addCorrespondences(world_pts, image_pts);
   problem.optimize();
+
+  VLOG(1) << "Cam center: " << calib.world2cam.inverse().translation().transpose();
+  VLOG(1) << "Focal length: " << calib.intrinsics.focal_length;
+  VLOG(1) << "Rotation matrix:\n" << calib.world2cam.so3().matrix();
+  VLOG(1) << "Translation: " << calib.world2cam.translation().transpose();
 }
 
 void ThreeViewReconstruction::fixRotationAndScale(const ThreeOf<CamId>& cam_ids, Mat3X& world_pts) {
@@ -331,9 +330,9 @@ void ThreeViewReconstruction::fixRotationAndScale(const ThreeOf<CamId>& cam_ids,
   SE3 world2init_cam = init_cam.world2cam;
   SE3 init_cam2world = world2init_cam.inverse();
 
-  LOG(INFO) << "Fixing orientation and scale";
-  LOG(INFO) << "Orientation update in degrees: " << init_cam2world.so3().logAndTheta().theta / M_PI * 180.;
-  LOG(INFO) << "Translation update: " << init_cam2world.translation().transpose();
+  VLOG(1) << "Fixing orientation and scale";
+  VLOG(1) << "Orientation update in degrees: " << init_cam2world.so3().logAndTheta().theta / M_PI * 180.;
+  VLOG(1) << "Translation update: " << init_cam2world.translation().transpose();
 
   for (auto& [cam_id, cam_calib] : cameras_) {
     cam_calib.world2cam = cam_calib.world2cam * init_cam2world;
@@ -343,7 +342,7 @@ void ThreeViewReconstruction::fixRotationAndScale(const ThreeOf<CamId>& cam_ids,
   const auto& second_cam = cameras_.at(cam_ids[1]);
   double second_cam_distance_from_origin = second_cam.world2cam.translation().norm();
   double scaling_factor = 1.0 / second_cam_distance_from_origin;
-  LOG(INFO) << "Scaling factor: " << scaling_factor;
+  VLOG(1) << "Scaling factor: " << scaling_factor;
 
   for (auto& [cam_id, cam_calib] : cameras_) {
     cam_calib.world2cam.translation() *= scaling_factor;
@@ -387,13 +386,13 @@ std::set<PointId> ThreeViewReconstruction::identifyOutliers(CamId cam_id,
     }
   }
 
-  LOG(INFO) << "Identified " << outlier_ids.size() << " outliers for camera " << cam_id;
+  VLOG(1) << "Identified " << outlier_ids.size() << " outliers for camera " << cam_id;
 
   return outlier_ids;
 }
 
 void ThreeViewReconstruction::retriangulateOutliers(const std::set<PointId>& outlier_ids) {
-  LOG(INFO) << "Retriangulating " << outlier_ids.size() << " outliers";
+  VLOG(1) << "Retriangulating " << outlier_ids.size() << " outliers";
 
   if (outlier_ids.empty()) {
     return;
@@ -420,7 +419,7 @@ void ThreeViewReconstruction::retriangulateOutliers(const std::set<PointId>& out
 
     pt_data.world_pt =
         triangulatePointRansac(image_pts, P_flattened(Eigen::all, P_indices), ransac_thr_, ransac_confidence_, 50);
-    LOG(INFO) << "New PT " << outlier_id << " pos: " << pt_data.world_pt.value().transpose();
+    VLOG(2) << "New PT " << outlier_id << " pos: " << pt_data.world_pt.value().transpose();
   }
 }
 

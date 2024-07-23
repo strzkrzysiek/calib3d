@@ -21,7 +21,7 @@ struct Dataset {
 
   bool loadFromJson(const std::string& filename);
 
-  bool verifyDataset() const;
+  [[nodiscard]] bool verifyDataset() const;
 
   void addObservationNoise(double noise, size_t seed = std::random_device()());
   void addObservationOutliers(double inlier_prob, size_t seed = std::random_device()());
