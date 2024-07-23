@@ -2,7 +2,11 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(bolt6-ba LANGUAGES CXX)
+project(calib3d LANGUAGES CXX)
+
+if(MSVC)
+    message(FATAL_ERROR "MSVC is not supported")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
