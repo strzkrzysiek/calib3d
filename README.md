@@ -1,6 +1,6 @@
 # Calib3D
 
-TThis project provides a library for the autocalibration of cameras' extrinsic and intrinsic parameters, along with 3D scene reconstruction. The purpose of the project is to showcase the computer vision skills of the author.
+This project provides a library for the autocalibration of cameras' extrinsic and intrinsic parameters, along with 3D scene reconstruction. The purpose of the project is to showcase the computer vision skills of the author.
 
 ## Building
 

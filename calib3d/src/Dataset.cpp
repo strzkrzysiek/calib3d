@@ -83,7 +83,7 @@ bool Dataset::loadFromJson(const std::string& filename, bool verify) {
     return false;
   }
 
-  return !verify || verifyDataset();
+  return !verify || verifyReprojectionError();
 }
 
 bool Dataset::dumpToJson(const std::string& filename) {
@@ -138,7 +138,7 @@ bool Dataset::dumpToJson(const std::string& filename) {
   return true;
 }
 
-bool Dataset::verifyDataset() const {
+bool Dataset::verifyReprojectionError() const {
   for (const auto& [cam_id, cam_bundle] : cameras) {
     const auto& obs = cam_bundle.observations;
 

@@ -7,13 +7,17 @@
 
 namespace calib3d {
 
+// Derived class for three-view reconstruction with bundle adjustment
 class ThreeViewReconstructionWithBA : protected ThreeViewReconstruction {
 public:
+  // Inherit base class functions
   using ThreeViewReconstruction::getCameras;
   using ThreeViewReconstruction::getPoints;
 
+  // Constructor to initialize with observation noise
   explicit ThreeViewReconstructionWithBA(double observation_noise);
 
+  // Main reconstruction function with bundle adjustment
   void reconstruct(CamId cam0_id,
                    const CameraSize& cam0_size,
                    const Observations& cam0_obs,
@@ -24,10 +28,11 @@ public:
                    const CameraSize& cam2_size,
                    const Observations& cam2_obs) override;
 
+  // Optimizes the reconstruction with principal point adjustment
   void optimizeWithPrincipalPoint();
 
 protected:
-  BAProblem ba_problem_;
+  BAProblem ba_problem_;  // Bundle adjustment problem instance
 };
 
 } // namespace calib3d
