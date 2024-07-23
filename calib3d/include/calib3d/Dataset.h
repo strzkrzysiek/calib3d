@@ -19,7 +19,8 @@ struct Dataset {
   std::map<CamId, CameraBundle> cameras;
   std::map<PointId, Vec3> world_points;
 
-  bool loadFromJson(const std::string& filename);
+  bool loadFromJson(const std::string& filename, bool verify = false);
+  bool dumpToJson(const std::string& filename);
 
   [[nodiscard]] bool verifyDataset() const;
 

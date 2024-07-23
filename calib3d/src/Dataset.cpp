@@ -7,7 +7,9 @@
 
 namespace calib3d {
 
-bool Dataset::loadFromJson(const std::string& filename) {
+bool Dataset::loadFromJson(const std::string& filename, bool verify) {
+  LOG(INFO) << "Loading dataset: " << filename;
+
   cameras.clear();
   world_points.clear();
 
@@ -79,7 +81,59 @@ bool Dataset::loadFromJson(const std::string& filename) {
     return false;
   }
 
-  return verifyDataset();
+  return !verify || verifyDataset();
+}
+
+bool Dataset::dumpToJson(const std::string& filename) {
+  LOG(INFO) << "Dumping dataset: " << filename;
+
+  std::ofstream file(filename);
+  if (!file.is_open()) {
+    LOG(ERROR) << "Failed to open file: " << filename;
+    return false;
+  }
+
+  try {
+    nlohmann::json cameras_json;
+    for (const auto& [cam_id, cam_bundle] : cameras) {
+      nlohmann::json calib_json;
+
+      Mat3x4 extrinsics = cam_bundle.calib.world2cam.matrix3x4();
+      calib_json["extrinsics"] = {{extrinsics(0, 0), extrinsics(0, 1), extrinsics(0, 2), extrinsics(0, 3)},
+                                  {extrinsics(1, 0), extrinsics(1, 1), extrinsics(1, 2), extrinsics(1, 3)},
+                                  {extrinsics(2, 0), extrinsics(2, 1), extrinsics(2, 2), extrinsics(2, 3)}};
+
+      Mat3 intrinsics = cam_bundle.calib.intrinsics.K();
+      calib_json["intrinsics"] = {{intrinsics(0, 0), intrinsics(0, 1), intrinsics(0, 2)},
+                                  {intrinsics(1, 0), intrinsics(1, 1), intrinsics(1, 2)},
+                                  {intrinsics(2, 0), intrinsics(2, 1), intrinsics(2, 2)}};
+
+      calib_json["size"] = {cam_bundle.calib.size.x(), cam_bundle.calib.size.y()};
+
+      nlohmann::json obs_json;
+      for (const auto& [pt_id, image_pt] : cam_bundle.observations) {
+        obs_json[std::to_string(pt_id)] = {image_pt.x(), image_pt.y()};
+      }
+
+      cameras_json[std::to_string(cam_id)] = {{"calib", calib_json}, {"observations", obs_json}};
+    }
+
+    nlohmann::json world_points_json;
+    for (const auto& [pt_id, world_pt] : world_points) {
+      world_points_json[std::to_string(pt_id)] = {world_pt.x(), world_pt.y(), world_pt.z()};
+    }
+
+    nlohmann::json root_json = {{"cameras", cameras_json}, {"worldPoints", world_points_json}};
+
+    file << std::setw(4) << root_json;
+
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+
+    return false;
+  }
+
+  return true;
 }
 
 bool Dataset::verifyDataset() const {

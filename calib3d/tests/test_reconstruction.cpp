@@ -12,7 +12,7 @@ using namespace calib3d;
 class ReconstructionTestFixture : public ::testing::Test {
 protected:
   void SetUp() override {
-    ASSERT_TRUE(dataset.loadFromJson(DATASET_FILE_PATH));
+    ASSERT_TRUE(dataset.loadFromJson(DATASET_FILE_PATH, true));
     ASSERT_FALSE(dataset.cameras.empty());
     ASSERT_FALSE(dataset.world_points.empty());
   }
