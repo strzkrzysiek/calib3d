@@ -27,34 +27,44 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
 
   std::mt19937 rnd_gen(seed);
 
+  // Square the threshold as the distance function should return a squared metric
   const double squared_thr = ransac_thr * ransac_thr;
 
+  // Keep track of the best consensus set
   std::vector<size_t> consensus_set_ids;
   double consensus_set_variance = 0.;
 
   for (size_t i = 0; i < max_iters; i++) {
+    // Draw a random subset (of size Spec::MinSampleSize) from the set of provided points
     auto [sample1, sample2] = getRandomSample(points1, points2, rnd_gen);
+    // Fit the model to the sample subset
     auto model_candidate = Spec::template fitModel(sample1, sample2);
 
+    // Calculate the distance metric for the calculated model canidate for all of the points
     auto squared_distances = Spec::template distance(points1, points2, model_candidate);
+    // Identify the inlier set
     auto inlier_ids = fromBinMask((squared_distances.array() < squared_thr).eval());
     const size_t n_inliers = inlier_ids.size();
 
+    // If the inlier set size is at least as big as the current consensus set
     if (n_inliers >= consensus_set_ids.size() && n_inliers > 0) {
       double inlier_variance = squared_distances(inlier_ids).sum() / n_inliers;
 
+      // If it is bigger or the same is the same but the new variance is smaller
       if (n_inliers > consensus_set_ids.size() || inlier_variance < consensus_set_variance) {
-        // New consensus set found
+        // New consensus set is found
         consensus_set_ids = inlier_ids;
         consensus_set_variance = inlier_variance;
 
         VLOG(3) << "Iteration: " << i;
         VLOG(3) << "New consensus set: " << n_inliers << " (var: " << inlier_variance << ")";
 
-        // Calculate new max_iters
+        // Implement an daptive algorithm for determining the number of RANSAC samples
+        // See: Algorithm 4.5 in Hartley and Zisserman (2003)
         double inlier_ratio = static_cast<double>(n_inliers) / n_points;
         VLOG(3) << "Inlier ratio: " << inlier_ratio;
 
+        // Equation (4.18) in Hartley and Zisserman (2003)
         auto new_max_iters = static_cast<size_t>(
             std::ceil(std::log(1. - confidence) / std::log(1. - std::pow(inlier_ratio, Spec::MinSampleSize))));
         if (new_max_iters < max_iters) {
@@ -65,6 +75,12 @@ typename Spec::ModelMatrix RansacEngine<Spec>::fit(const Eigen::DenseBase<Derive
     }
   }
 
+  // If the provided set contains a significant number of outliers and/or
+  // is so noisy so that most of the samples are considered as outliers
+  // then it is possible that the largest consensus set contains fewer elements than
+  // the minimal sample size.
+  // It is clear then that the estimation of the inlier set failed.
+  // Fall back to using all the input points as inliers.
   if (consensus_set_ids.size() < Spec::MinSampleSize) {
     LOG(WARNING) << "Consensus set (" << consensus_set_ids.size()
                  << ") is smaller than the minimal required sample size";

@@ -7,6 +7,8 @@
 
 namespace calib3d {
 
+// Regular reprojection error with automatic jacobians
+// The image points are constant while the world points and camera calibrations are variable
 struct ReprojectionError {
   explicit ReprojectionError(const Vec2& image_pt) : image_pt(image_pt) {}
 
@@ -37,7 +39,12 @@ struct ReprojectionError {
 };
 
 struct BAProblem::Impl {
+  // Special parameterization of Sophus::SE3 which is internally a quaternion followed by a 3D translation vector
   using SE3Manifold = ceres::ProductManifold<ceres::EigenQuaternionManifold, ceres::EuclideanManifold<3>>;
+  // Even more special parameterization for the second camera whose center is supposed to be at unit distance from
+  // origin. This means that is it should be at a unit sphere centered at origin, and we may enforce it
+  // by setting a SphereManifold for the translation vector of the first camera.
+  // This is required so that the scene doesn't collapse during the optimization process.
   using SE3WithFixedNormManifold = ceres::ProductManifold<ceres::EigenQuaternionManifold, ceres::SphereManifold<3>>;
 
   explicit Impl(double observation_noise)
@@ -45,31 +52,44 @@ struct BAProblem::Impl {
         cauchy_loss_(observation_noise) {}
 
   void addCamera(CameraCalib& calib, CameraType type = CameraType::CAM_N) {
+    // Initially, don't optimize the principal points.
+    // Ideally, don't optimize it at all if you don't have ideal correspondences
     problem_.AddParameterBlock(calib.intrinsics.principal_point.data(), 2);
     problem_.SetParameterBlockConstant(calib.intrinsics.principal_point.data());
 
+    // Add a parameter block for camera extrinsic parameters
     problem_.AddParameterBlock(calib.world2cam.data(), SE3::num_parameters);
 
     switch (type) {
     case CameraType::CAM_0:
+      // If the first camera is added
+      // Double-check that it is aligned with origin
       CHECK(calib.world2cam.so3().unit_quaternion().isApprox(Eigen::Quaterniond::Identity()));
       CHECK(calib.world2cam.translation().isZero());
 
+      // And set its pose to identity to eliminate any small errors
       calib.world2cam.so3().setQuaternion(Eigen::Quaterniond::Identity());
       calib.world2cam.translation().setZero();
 
+      // Set this block constant, as we don't want to move the origin and left the scene drift away.
       problem_.SetParameterBlockConstant(calib.world2cam.data());
       break;
 
     case CameraType::CAM_1:
+      // If the second camera is added
+      // Double-check that its distance from the origin is unit
       CHECK_NEAR(calib.world2cam.translation().norm(), 1.0, 1e-5);
 
+      // And set the distance exactly to unit if it is close to it
       calib.world2cam.translation().normalize();
 
+      // Set the special parameterization for the first camera to keep it at unit distance from origin
       problem_.SetManifold(calib.world2cam.data(), &se3_with_fixed_norm_manifold_);
       break;
 
     case CameraType::CAM_N:
+      // If any other camera is added
+      // Just set the correct parameterization for SE3 type
       problem_.SetManifold(calib.world2cam.data(), &se3_manifold_);
       break;
     }
@@ -78,6 +98,7 @@ struct BAProblem::Impl {
   }
 
   void addObservation(CameraCalib& calib, Vec3& world_pt, const Vec2& image_pt) {
+    // Create a cost function with Cauchy loss function which should effectively discriminate the influence of outliers
     auto cost_function = ReprojectionError::create(image_pt);
     problem_.AddResidualBlock(cost_function,
                               &cauchy_loss_,

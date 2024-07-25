@@ -12,17 +12,16 @@
 
 namespace calib3d {
 
-
 // Structure to hold camera calibration data and observations
 struct CameraBundle {
-  CameraCalib calib;              // Camera calibration parameters
-  Observations observations;      // Observed image points
+  CameraCalib calib;         // Camera calibration parameters
+  Observations observations; // Observed image points
 };
 
 // Dataset structure to manage multiple cameras and 3D world points
 struct Dataset {
-  std::map<CamId, CameraBundle> cameras;  // Map of camera IDs to camera bundles
-  std::map<PointId, Vec3> world_points;   // Map of point IDs to 3D world points
+  std::map<CamId, CameraBundle> cameras; // Map of camera IDs to camera bundles
+  std::map<PointId, Vec3> world_points;  // Map of point IDs to 3D world points
 
   // Loads dataset from a JSON file
   bool loadFromJson(const std::string& filename, bool verify = false);

@@ -36,8 +36,9 @@ public:
   void setPrincipalPointConstant();
 
 private:
-  struct Impl;  // Forward declaration for the implementation
-  std::unique_ptr<Impl> impl_;  // Unique pointer to the implementation
+  // The implementation is hidden so that the ceres headers are not included in other parts of the project
+  struct Impl;                 // Forward declaration for the implementation
+  std::unique_ptr<Impl> impl_; // Unique pointer to the implementation
 };
 
 } // namespace calib3d

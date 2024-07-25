@@ -42,7 +42,7 @@ protected:
   // Optimizes the parameters for a new camera
   void optimizeNewCamera(CamId cam_id, const Observations& cam_obs);
 
-  const Mat4 metric_ADQ_;  // Absolute dual quadratic matrix for metric rectification
+  const Mat4 metric_ADQ_; // Absolute dual quadric matrix for metric rectification
 };
 
 } // namespace calib3d

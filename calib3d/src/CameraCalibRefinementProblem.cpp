@@ -7,6 +7,8 @@
 
 namespace calib3d {
 
+// Regular reprojection error with automatic jacobians
+// The world points and image points are constant and the camera parameters are variable
 struct ReprojectionError {
   ReprojectionError(const Mat3X& world_pts, const Mat2X& image_pts, int idx)
       : world_pts(world_pts), image_pts(image_pts), idx(idx) {}
@@ -34,17 +36,23 @@ struct ReprojectionError {
 };
 
 struct CameraCalibRefinementProblem::Impl {
+  // Special parameterization of Sophus::SE3 which is internally a quaternion followed by a 3D translation vector
   using SE3Manifold = ceres::ProductManifold<ceres::EigenQuaternionManifold, ceres::EuclideanManifold<3>>;
 
   Impl(CameraCalib& calib, const Mat3x4& initial_P, double outlier_thr)
       : calib_(calib), initial_P_(initial_P), outlier_thr_(outlier_thr), problem_options_(createProblemOptions()),
         solver_options_(createSolverOptions()), problem_(problem_options_) {
+    // Set special parameterization of SE3 pose
     problem_.AddParameterBlock(calib_.world2cam.data(), SE3::num_parameters, &se3_manifold_);
   }
 
   void addCorrespondences(const Mat3X& world_pts, const Mat2X& image_pts) {
     CHECK_EQ(world_pts.cols(), image_pts.cols());
 
+    // Calculate the reprojection error of the world points with the projection matrix initial_P_
+    // To find the points that were inliers while calculating that matrix
+    // If we used K [ R | t ] to check the reprojection, most probably all the points would be classified as outliers
+    // because K [ R | t ] is a coarse estimation and this is why it needs refining
     auto reprojected_pts = (initial_P_ * world_pts.colwise().homogeneous()).colwise().hnormalized();
     VecX distance = (reprojected_pts - image_pts).colwise().squaredNorm();
     for (int i = 0; i < world_pts.cols(); i++) {
@@ -52,6 +60,7 @@ struct CameraCalibRefinementProblem::Impl {
         continue;
       }
 
+      // Create a cost function with trivial loss function as we only add inliers to the optimization problem
       auto cost_function = ReprojectionError::create(world_pts, image_pts, i);
       problem_.AddResidualBlock(cost_function, nullptr, calib_.world2cam.data(), &calib_.intrinsics.focal_length);
     }

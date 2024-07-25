@@ -58,17 +58,17 @@ using SE3 = SE3T<double>;
 using CamId = size_t;
 using PointId = size_t;
 
-using Observations = std::map<CamId, Vec2>;  // Map of camera ID to 2D observations
-using CameraSize = Eigen::Vector2i;  // Size of the camera
+using Observations = std::map<CamId, Vec2>; // Map of camera ID to 2D observations
+using CameraSize = Eigen::Vector2i;         // Size of the camera
 
 template <class T>
 using CameraExtrinsicsT = SE3T<T>;
 
-using CameraExtrinsics = CameraExtrinsicsT<double>;  // Camera extrinsics type
+using CameraExtrinsics = CameraExtrinsicsT<double>; // Camera extrinsics type
 
 // Structure to hold camera intrinsics parameters
 struct CameraIntrinsics {
-  Vec2 principal_point;  // Principal point of the camera
+  Vec2 principal_point; // Principal point of the camera
   double focal_length;  // Focal length of the camera
 
   [[nodiscard]] Mat3 K() const {
@@ -84,20 +84,20 @@ struct CameraIntrinsics {
 
 // Structure to hold complete camera calibration data
 struct CameraCalib {
-  CameraIntrinsics intrinsics;  // Intrinsic parameters
+  CameraIntrinsics intrinsics; // Intrinsic parameters
   CameraExtrinsics world2cam;  // Extrinsic parameters (world to camera transformation)
-  CameraSize size;  // Size of the camera
+  CameraSize size;             // Size of the camera
 
-  [[nodiscard]] Mat3x4 P() const { return intrinsics.K() * world2cam.matrix3x4(); }  // Return the projection matrix
+  [[nodiscard]] Mat3x4 P() const { return intrinsics.K() * world2cam.matrix3x4(); } // Return the projection matrix
 };
 
 template <class T>
-using ThreeOf = std::array<T, 3>;  // Array of three elements
+using ThreeOf = std::array<T, 3>; // Array of three elements
 
 // Structure to hold point data in the world and image coordinates
 struct PointData {
-  std::optional<Vec3> world_pt;  // 3D point in the world coordinate system
-  std::map<CamId, Vec2> image_pts;  // Map of camera ID to 2D image points
+  std::optional<Vec3> world_pt;    // 3D point in the world coordinate system
+  std::map<CamId, Vec2> image_pts; // Map of camera ID to 2D image points
 };
 
 } // namespace calib3d

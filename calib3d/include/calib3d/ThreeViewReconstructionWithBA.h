@@ -29,10 +29,13 @@ public:
                    const Observations& cam2_obs) override;
 
   // Optimizes the reconstruction with principal point adjustment
+  // This is an optional method to call if all the observations are accurate and an exact principal point
+  // should be calculated. It should be called as a final step of whole optimization procedure.
+  // Otherwise, it is going to spoil the reconstruction.
   void optimizeWithPrincipalPoint();
 
 protected:
-  BAProblem ba_problem_;  // Bundle adjustment problem instance
+  BAProblem ba_problem_; // Bundle adjustment problem instance
 };
 
 } // namespace calib3d
